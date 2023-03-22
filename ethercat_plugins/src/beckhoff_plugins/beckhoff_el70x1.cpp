@@ -1,4 +1,4 @@
-// Copyright 2022 ICUBE Laboratory, University of Strasbourg
+// Copyright 2023 ICUBE Laboratory, University of Strasbourg
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@ public:
   virtual ~Beckhoff_EL7031() {}
   virtual void processData(size_t index, uint8_t * domain_address)
   {
+
+
+    
   /*  if (cii_ao_[index] >= 0) {
       double data = command_interface_ptr_->at(cii_ao_[index]);
       data = std::isnan(data) ? 0 : data;
@@ -37,6 +40,40 @@ public:
         data * static_cast<double>(std::numeric_limits<int16_t>::max()) / 10);
       EC_WRITE_S16(domain_address, dac_data);
     }*/
+    stp_drv_0_status_word =EC_READ_U8(domain1_pd+offset_stp_drv_0_status_word);
+  /*  printf("Status Word : \n");
+    printf("\t Ready to enable : %u\n",!!(stp_drv_0_status_word & STATUS_READY_TO_ENABLE));
+    printf("\t Ready  : %u\n",!!(stp_drv_0_status_word & STATUS_READY));
+    printf("\t Warning : %u\n",!!(stp_drv_0_status_word & STATUS_WARNING));
+    printf("\t Error  : %u\n\n",!!(stp_drv_0_status_word & STATUS_ERROR));*/
+    switch(stp_drv_state)
+    {
+    case STP_DRV_NOT_READY_STATUS:
+        if ( !!(stp_drv_0_status_word & STATUS_READY_TO_ENABLE) )
+        {
+            stp_drv_state = STP_DRV_READY_TO_ENABLE_STATUS;
+            EC_WRITE_U8(domain1_pd+offset_stp_drv_0_ctrl_word, 0x01);
+        }
+
+        break;
+    case STP_DRV_READY_TO_ENABLE_STATUS:
+        if ( !!(stp_drv_0_status_word & STATUS_READY) )
+            stp_drv_state = STP_DRV_READY_STATUS;
+
+        break;
+    case STP_DRV_READY_STATUS:
+       target_position = 10000;
+        EC_WRITE_S32(domain1_pd+offset_stp_drv_0_position_target, target_position);
+
+
+        break;
+    case STP_DRV_WARNING_STATUS:
+        break;
+    case STP_DRV_ERROR_STATUS:
+        break;
+    default:
+        break;
+    }
   }
   virtual const ec_sync_info_t * syncs() {return &syncs_[0];}
   virtual size_t syncSize()
@@ -134,5 +171,4 @@ private:
 
 #include <pluginlib/class_list_macros.hpp>
 
-PLUGINLIB_EXPORT_CLASS(ethercat_plugins::Beckhoff_EL4132, ethercat_interface::EcSlave)
-PLUGINLIB_EXPORT_CLASS(ethercat_plugins::Beckhoff_EL4134, ethercat_interface::EcSlave)
+PLUGINLIB_EXPORT_CLASS(ethercat_plugins::Beckhoff_EL7031, ethercat_interface::EcSlave)
