@@ -47,11 +47,13 @@ public:
   virtual bool setupSlave(
     std::unordered_map<std::string, std::string> slave_paramters,
     std::vector<double> * state_interface,
-    std::vector<double> * command_interface)
+    std::vector<double> * command_interface,
+    const std::string& for_name = "")
   {
     state_interface_ptr_ = state_interface;
     command_interface_ptr_ = command_interface;
     paramters_ = slave_paramters;
+    for_name_ = for_name;
 
     for (auto index = 0ul; index < 2; index++) {
       if (paramters_.find(
@@ -123,7 +125,8 @@ public:
   virtual bool setupSlave(
     std::unordered_map<std::string, std::string> slave_paramters,
     std::vector<double> * state_interface,
-    std::vector<double> * command_interface)
+    std::vector<double> * command_interface,
+    const std::string& for_name = "")
   {
     state_interface_ptr_ = state_interface;
     command_interface_ptr_ = command_interface;

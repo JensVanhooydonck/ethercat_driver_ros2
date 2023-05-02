@@ -45,7 +45,8 @@ public:
   virtual bool setupSlave(
     std::unordered_map<std::string, std::string> slave_paramters,
     std::vector<double> * state_interface,
-    std::vector<double> * command_interface);
+    std::vector<double> * command_interface,
+    const std::string& for_name = "");
 
   int8_t mode_of_operation_display_ = 0;
   int8_t mode_of_operation_ = -1;

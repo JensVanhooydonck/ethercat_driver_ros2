@@ -54,11 +54,13 @@ public:
   virtual bool setupSlave(
     std::unordered_map<std::string, std::string> slave_paramters,
     std::vector<double> * state_interface,
-    std::vector<double> * command_interface)
+    std::vector<double> * command_interface,
+    const std::string& for_name = "")
   {
     state_interface_ptr_ = state_interface;
     command_interface_ptr_ = command_interface;
     paramters_ = slave_paramters;
+    for_name_ = for_name;
     return true;
   }
   uint32_t vendor_id_;
@@ -70,6 +72,7 @@ protected:
   std::vector<double> * state_interface_ptr_;
   std::vector<double> * command_interface_ptr_;
   std::unordered_map<std::string, std::string> paramters_;
+  std::string for_name_;
   bool is_operational_ = false;
 };
 }  // namespace ethercat_interface

@@ -88,11 +88,13 @@ void GenericEcSlave::setup_syncs()
 bool GenericEcSlave::setupSlave(
   std::unordered_map<std::string, std::string> slave_paramters,
   std::vector<double> * state_interface,
-  std::vector<double> * command_interface)
+  std::vector<double> * command_interface,
+  const std::string& for_name)
 {
   state_interface_ptr_ = state_interface;
   command_interface_ptr_ = command_interface;
   paramters_ = slave_paramters;
+  for_name_ = for_name;
 
   if (paramters_.find("slave_config") != paramters_.end()) {
     if (!setup_from_config_file(paramters_["slave_config"])) {
@@ -234,16 +236,23 @@ bool GenericEcSlave::setup_from_config_file(std::string config_file)
 void GenericEcSlave::setup_interface_mapping()
 {
   for (auto & channel : pdo_channels_info_) {
-    if (channel.pdo_type == ethercat_interface::TPDO) {
-      if (paramters_.find("state_interface/" + channel.interface_name) != paramters_.end()) {
-        channel.interface_index =
-          std::stoi(paramters_["state_interface/" + channel.interface_name]);
+
+    if(channel.for_name.empty() || (!for_name_.empty() && channel.for_name == for_name_)) {
+      if (channel.pdo_type == ethercat_interface::TPDO) {
+        if (paramters_.find("state_interface/" + channel.interface_name) != paramters_.end()) {
+          channel.interface_index =
+            std::stoi(paramters_["state_interface/" + channel.interface_name]);
+        }
       }
-    }
-    if (channel.pdo_type == ethercat_interface::RPDO) {
-      if (paramters_.find("command_interface/" + channel.interface_name) != paramters_.end()) {
-        channel.interface_index = std::stoi(
-          paramters_["command_interface/" + channel.interface_name]);
+      if (channel.pdo_type == ethercat_interface::RPDO) {
+        if (paramters_.find("command_interface/" + channel.interface_name) != paramters_.end()) {
+          channel.interface_index = std::stoi(
+            paramters_["command_interface/" + channel.interface_name]);
+          if(channel.read && paramters_.find("state_interface/" + channel.interface_name) != paramters_.end()) {
+            channel.interface_index_state_for_command =
+            std::stoi(paramters_["state_interface/" + channel.interface_name]);
+          }
+        }
       }
     }
 

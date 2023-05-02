@@ -85,7 +85,7 @@ CallbackReturn EthercatDriver::on_init(
       try {
         auto module = ec_loader_.createSharedInstance(module_params[i].at("plugin"));
         if (!module->setupSlave(
-            module_params[i], &hw_joint_states_[j], &hw_joint_commands_[j]))
+            module_params[i], &hw_joint_states_[j], &hw_joint_commands_[j], info_.joints[j].name))
         {
           RCLCPP_FATAL(
             rclcpp::get_logger("EthercatDriver"),
@@ -119,7 +119,7 @@ CallbackReturn EthercatDriver::on_init(
       try {
         auto module = ec_loader_.createSharedInstance(module_params[i].at("plugin"));
         if (!module->setupSlave(
-            module_params[i], &hw_gpio_states_[g], &hw_gpio_commands_[g]))
+            module_params[i], &hw_gpio_states_[g], &hw_gpio_commands_[g], info_.gpios[g].name))
         {
           RCLCPP_FATAL(
             rclcpp::get_logger("EthercatDriver"),
@@ -153,7 +153,7 @@ CallbackReturn EthercatDriver::on_init(
       try {
         auto module = ec_loader_.createSharedInstance(module_params[i].at("plugin"));
         if (!module->setupSlave(
-            module_params[i], &hw_sensor_states_[s], &hw_sensor_commands_[s]))
+            module_params[i], &hw_sensor_states_[s], &hw_sensor_commands_[s], info_.sensors[s].name))
         {
           RCLCPP_FATAL(
             rclcpp::get_logger("EthercatDriver"),

@@ -97,7 +97,10 @@ public:
         if(factor != 1 || offset != 0) {
             value = round(value);
         }
-        if (value) {buffer_ += data_mask;}
+        if (value) {
+          buffer_ += data_mask;
+          std::cout << "Writing: " << static_cast<uint16_t>(buffer_) << std::endl;
+        }
       } else if (data_mask != 0) {
         buffer_ = 0;
         buffer_ |= (static_cast<uint8_t>(value) & data_mask);
@@ -126,6 +129,9 @@ public:
           ec_write(domain_address, default_value);
         }
       }
+    }
+    if(pdo_type == RPDO && interface_index_state_for_command >= 0 && !std::isnan(command_interface_ptr_->at(interface_index))) {
+      state_interface_ptr_->at(interface_index_state_for_command) = command_interface_ptr_->at(interface_index);
     }
   }
 
@@ -160,6 +166,12 @@ public:
         default_value = channel_config["default"].as<double>();
       }
 
+      if (channel_config["combined_interface"]) {
+        interface_name = channel_config["command_interface"].as<std::string>();
+        read = true;
+      }
+
+
     } else if (pdo_type == TPDO) {
       // interface name
       if (channel_config["state_interface"]) {
@@ -178,6 +190,10 @@ public:
     // mask
     if (channel_config["mask"]) {
       data_mask = channel_config["mask"].as<uint8_t>();
+    }
+
+    if (channel_config["for"]) {
+      for_name = channel_config["for"].as<std::string>();
     }
 
     return true;
@@ -212,11 +228,14 @@ public:
   uint8_t data_mask = 0;
   double default_value = std::numeric_limits<double>::quiet_NaN();
   int interface_index = -1;
+  int interface_index_state_for_command = -1;
+  bool read = false;
   double last_value = std::numeric_limits<double>::quiet_NaN();
   bool allow_ec_write = true;
   bool override_command = false;
   double factor = 1;
   double offset = 0;
+  std::string for_name;
 
 private:
   std::vector<double> * command_interface_ptr_;
