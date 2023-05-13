@@ -97,7 +97,7 @@ public:
         if(factor != 1 || offset != 0) {
             value = round(value);
         }
-        if (value) {buffer_ += data_mask;}
+        if (value > 0) {buffer_ += data_mask;}
       } else if (data_mask != 0) {
         buffer_ = 0;
         buffer_ |= (static_cast<uint8_t>(value) & data_mask);
