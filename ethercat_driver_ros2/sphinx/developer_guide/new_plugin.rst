@@ -67,7 +67,7 @@ To be loaded by the :code:`ethercat_driver_ros2`, the new module plugin needs to
       state_interface_ptr_ = state_interface;
       command_interface_ptr_ = command_interface;
       paramters_ = slave_paramters;
-
+      for_name_ = for_name;
       // Your module setup logic goes here
 
       return true;
