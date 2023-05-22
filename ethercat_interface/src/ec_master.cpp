@@ -197,12 +197,12 @@ void EcMaster::registerPDOInDomain(
 
 
     // print the domain pdo entry
-    std::cout << "{" << pdo_reg.alias << ", " << pdo_reg.position;
-    std::cout << ", 0x" << std::hex << pdo_reg.vendor_id;
-    std::cout << ", 0x" << std::hex << pdo_reg.product_code;
-    std::cout << ", 0x" << std::hex << pdo_reg.index;
-    std::cout << ", 0x" << std::hex << static_cast<int>(pdo_reg.subindex);
-    std::cout << "}" << std::dec << std::endl;
+    // std::cout << "{" << pdo_reg.alias << ", " << pdo_reg.position;
+    // std::cout << ", 0x" << std::hex << pdo_reg.vendor_id;
+    // std::cout << ", 0x" << std::hex << pdo_reg.product_code;
+    // std::cout << ", 0x" << std::hex << pdo_reg.index;
+    // std::cout << ", 0x" << std::hex << static_cast<int>(pdo_reg.subindex);
+    // std::cout << "}" << std::dec << std::endl;
   }
 
   // set the last element to null
