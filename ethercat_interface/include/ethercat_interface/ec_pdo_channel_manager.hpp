@@ -47,7 +47,7 @@ public:
 
   ec_pdo_entry_info_t get_pdo_entry_info() {return {index, sub_index, type2bits(data_type)};}
 
-  double ec_read(uint8_t * domain_address)
+  double ec_read(uint8_t * domain_address, bool inverse_factor = false)
   {
     if (data_type == "uint8") {
       last_value = static_cast<double>(EC_READ_U8(domain_address));
@@ -68,7 +68,12 @@ public:
     } else {
       last_value = static_cast<double>(EC_READ_U8(domain_address) & data_mask);
     }
-    last_value = factor * last_value + offset;
+    if(inverse_factor) {
+      last_value = (last_value - offset) / factor;
+    } else {
+      last_value = factor * last_value + offset;
+    }
+    
     return last_value;
   }
 
@@ -127,8 +132,7 @@ public:
         }
       }
       if(interface_index_state_for_command >= 0) {
-        last_value = static_cast<double>(EC_READ_U8(domain_address) & data_mask);
-        last_value = (last_value - offset) / factor;
+        ec_read(domain_address, true);
         state_interface_ptr_->at(interface_index_state_for_command) = last_value;
       }
     }
