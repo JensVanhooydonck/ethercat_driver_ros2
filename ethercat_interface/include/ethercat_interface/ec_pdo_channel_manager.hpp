@@ -118,7 +118,7 @@ public:
     if (pdo_type == TPDO) {
       ec_read(domain_address);
       if (interface_index >= 0) {
-        state_interface_ptr_->at(interface_index) = roundf(last_value * 10000.0f) / 10000.0f;
+        state_interface_ptr_->at(interface_index) = last_value;
       }
     } else if (pdo_type == RPDO && allow_ec_write) {
       if (interface_index >= 0 &&
@@ -133,7 +133,7 @@ public:
       }
       if(interface_index_state_for_command >= 0) {
         ec_read(domain_address, true);
-        state_interface_ptr_->at(interface_index_state_for_command) = roundf(last_value * 10000.0f) / 10000.0f;
+        state_interface_ptr_->at(interface_index_state_for_command) = last_value;
       }
     }
   }
