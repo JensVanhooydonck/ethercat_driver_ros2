@@ -65,6 +65,8 @@ public:
       last_value = static_cast<double>(EC_READ_U64(domain_address));
     } else if (data_type == "int64") {
       last_value = static_cast<double>(EC_READ_S64(domain_address));
+    } else if (data_type == "bool") {
+      last_value = (EC_READ_U8(domain_address) & data_mask) ? 1 : 0;
     } else {
       last_value = static_cast<double>(EC_READ_U8(domain_address) & data_mask);
     }
@@ -227,7 +229,7 @@ public:
   uint8_t sub_index;
   std::string data_type;
   std::string interface_name;
-  uint8_t data_mask = 0;
+  uint8_t data_mask = 255;
   double default_value = std::numeric_limits<double>::quiet_NaN();
   int interface_index = -1;
   int interface_index_state_for_command = -1;
