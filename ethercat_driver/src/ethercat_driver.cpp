@@ -68,7 +68,7 @@ CallbackReturn EthercatDriver::on_init(
   }
 
   for (uint j = 0; j < info_.joints.size(); j++) {
-    RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "joints");
+    RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "joint: %s", info_.joints[j].name.c_str());
     // check all joints for EC modules and load into ec_modules_
     auto module_params = getEcModuleParam(info_.original_xml, info_.joints[j].name, "joint");
     ec_module_parameters_.insert(
@@ -102,7 +102,7 @@ CallbackReturn EthercatDriver::on_init(
     }
   }
   for (uint g = 0; g < info_.gpios.size(); g++) {
-    RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "gpios");
+    RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "gpio: %s", info_.gpios[g].name.c_str());
     // check all gpios for EC modules and load into ec_modules_
     auto module_params = getEcModuleParam(info_.original_xml, info_.gpios[g].name, "gpio");
     ec_module_parameters_.insert(
