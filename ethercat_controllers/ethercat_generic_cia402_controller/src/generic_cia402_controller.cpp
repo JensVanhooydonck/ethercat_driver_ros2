@@ -133,11 +133,10 @@ namespace ethercat_controllers {
   }
 
   controller_interface::return_type CiA402Controller::update(
-    const rclcpp::Time & /*time*/,
-    const rclcpp::Duration & /*period*/)
-  {
+      const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/
+  ) {
     if (rt_drive_state_publisher_ && rt_drive_state_publisher_->trylock()) {
-      auto & msg = rt_drive_state_publisher_->msg_;
+      auto &msg = rt_drive_state_publisher_->msg_;
       msg.header.stamp = get_node()->now();
       msg.dof_names.resize(dof_names_.size());
       msg.modes_of_operation.resize(dof_names_.size());
@@ -146,9 +145,11 @@ namespace ethercat_controllers {
 
       for (auto i = 0ul; i < dof_names_.size(); i++) {
         msg.dof_names[i] = dof_names_[i];
-        msg.modes_of_operation[i] = mode_of_operation_str(state_interfaces_[2 * i].get_value());
+        msg.modes_of_operation[i] =
+            mode_of_operation_str(state_interfaces_[2 * i].get_value());
         msg.status_words[i] = state_interfaces_[2 * i + 1].get_value();
-        msg.drive_states[i] = device_state_str(state_interfaces_[2 * i + 1].get_value());
+        msg.drive_states[i] =
+            device_state_str(state_interfaces_[2 * i + 1].get_value());
       }
 
       rt_drive_state_publisher_->unlockAndPublish();
@@ -156,7 +157,7 @@ namespace ethercat_controllers {
 
     // getting the data from services using the rt pipe
     auto moo_request = rt_moo_srv_ptr_.readFromRT();
-    auto reset_fault_request = rt_reset_fault_srv_ptr_.readFromRT();
+    // auto reset_fault_request = rt_reset_fault_srv_ptr_.readFromRT();
 
     for (auto i = 0ul; i < dof_names_.size(); i++) {
       if (!moo_request || !(*moo_request)) {
@@ -167,15 +168,17 @@ namespace ethercat_controllers {
         }
       }
 
-      if (reset_fault_request && (*reset_fault_request)) {
-        if (dof_names_[i] == (*reset_fault_request)->dof_name) {
-          reset_faults_[i] = true;
-          rt_reset_fault_srv_ptr_.reset();
-        }
-      }
+      // if (reset_fault_request && (*reset_fault_request)) {
+      //   if (dof_names_[i] == (*reset_fault_request)->dof_name) {
+      //     reset_faults_[i] = true;
+      //     rt_reset_fault_srv_ptr_.reset();
+      //   }
+      // }
 
-      command_interfaces_[2 * i + 1].set_value(mode_ops_[i]);  // mode_of_operation
-      command_interfaces_[2 * i + 2].set_value(reset_faults_[i]);  // reset_fault
+      command_interfaces_[2 * i + 1].set_value(mode_ops_[i]
+      ); // mode_of_operation
+      // command_interfaces_[2 * i + 2].set_value(reset_faults_[i]);  //
+      // reset_fault
       reset_faults_[i] = false;
     }
 
