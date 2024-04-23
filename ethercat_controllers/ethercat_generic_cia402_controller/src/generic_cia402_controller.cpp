@@ -88,6 +88,10 @@ namespace ethercat_controllers {
         "~/switch_mode_of_operation",
         std::bind(&CiA402Controller::switch_moo_callback, this, _1, _2)
     );
+    start_homing_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
+        "~/start_homing",
+        std::bind(&CiA402Controller::start_homing, this, _1, _2)
+    );
     reset_fault_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
         "~/reset_fault",
         std::bind(&CiA402Controller::reset_fault_callback, this, _1, _2)
@@ -101,7 +105,7 @@ namespace ethercat_controllers {
   CiA402Controller::command_interface_configuration() const {
     controller_interface::InterfaceConfiguration conf;
     conf.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-    conf.names.reserve(dof_names_.size() * 2);
+    conf.names.reserve(dof_names_.size() * 3);
     for (const auto &dof_name : dof_names_) {
       conf.names.push_back(dof_name + "/" + "control_word");
       conf.names.push_back(dof_name + "/" + "mode_of_operation");
@@ -157,7 +161,8 @@ namespace ethercat_controllers {
 
     // getting the data from services using the rt pipe
     auto moo_request = rt_moo_srv_ptr_.readFromRT();
-    // auto reset_fault_request = rt_reset_fault_srv_ptr_.readFromRT();
+    auto reset_fault_request = rt_reset_fault_srv_ptr_.readFromRT();
+    auto start_homing_request = rt_start_homing_srv_ptr_.readFromRT();
 
     for (auto i = 0ul; i < dof_names_.size(); i++) {
       if (!moo_request || !(*moo_request)) {
@@ -168,17 +173,28 @@ namespace ethercat_controllers {
         }
       }
 
-      // if (reset_fault_request && (*reset_fault_request)) {
-      //   if (dof_names_[i] == (*reset_fault_request)->dof_name) {
-      //     reset_faults_[i] = true;
-      //     rt_reset_fault_srv_ptr_.reset();
-      //   }
-      // }
+      if (reset_fault_request && (*reset_fault_request)) {
+        if (dof_names_[i] == (*reset_fault_request)->dof_name) {
+          reset_faults_[i] = true;
+          // rt_reset_fault_srv_ptr_.reset();
+          rt_reset_fault_srv_ptr_.writeFromNonRT(nullptr);
+        }
+      }
 
-      command_interfaces_[2 * i + 1].set_value(mode_ops_[i]
+      if (start_homing_request && (*start_homing_request)) {
+        if (dof_names_[i] == (*start_homing_request)->dof_name) {
+          // int control_word = command_interfaces_[3 * i].get_value();
+          auto control = 0b00011111;
+          command_interfaces_[3 * i].set_value(control); // control_word
+          std::cout << "Homing started at dof: " << dof_names_[i] << std::endl;
+          // rt_start_homing_srv_ptr_.reset();
+          rt_start_homing_srv_ptr_.writeFromNonRT(nullptr);
+        }
+      }
+
+      command_interfaces_[3 * i + 1].set_value(mode_ops_[i]
       ); // mode_of_operation
-      // command_interfaces_[2 * i + 2].set_value(reset_faults_[i]);  //
-      // reset_fault
+      command_interfaces_[3 * i + 2].set_value(reset_faults_[i]); // reset_fault
       reset_faults_[i] = false;
     }
 
@@ -255,6 +271,21 @@ namespace ethercat_controllers {
       rt_reset_fault_srv_ptr_.writeFromNonRT(request);
       response->return_message =
           "Request transmitted to drive at dof:" + request->dof_name;
+    } else {
+      response->return_message =
+          "Abort. DoF " + request->dof_name + " not configured.";
+    }
+  }
+
+  void CiA402Controller::start_homing(
+      const std::shared_ptr<ResetFaultSrv::Request> request,
+      std::shared_ptr<ResetFaultSrv::Response> response
+  ) {
+    if (find(dof_names_.begin(), dof_names_.end(), request->dof_name) !=
+        dof_names_.end()) {
+      rt_start_homing_srv_ptr_.writeFromNonRT(request);
+      response->return_message =
+          "Requesting starting of homing at dof:" + request->dof_name;
     } else {
       response->return_message =
           "Abort. DoF " + request->dof_name + " not configured.";
