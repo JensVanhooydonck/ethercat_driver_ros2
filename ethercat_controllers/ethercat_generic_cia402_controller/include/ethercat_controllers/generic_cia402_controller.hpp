@@ -74,21 +74,25 @@ namespace ethercat_controllers {
       std::vector<int> mode_ops_;
       std::vector<double> control_words_;
       std::vector<bool> reset_faults_;
+      std::vector<bool> reset_homing_;
 
       using DriveStatePublisher =
           realtime_tools::RealtimePublisher<DriveStateMsgType>;
       rclcpp::Publisher<DriveStateMsgType>::SharedPtr drive_state_publisher_;
       std::unique_ptr<DriveStatePublisher> rt_drive_state_publisher_;
 
-      realtime_tools::RealtimeBuffer<std::shared_ptr<SwitchMOOSrv::Request>>
+      std::vector<realtime_tools::RealtimeBuffer<
+          std::shared_ptr<SwitchMOOSrv::Request>>>
           rt_moo_srv_ptr_;
       rclcpp::Service<SwitchMOOSrv>::SharedPtr moo_srv_ptr_;
 
-      realtime_tools::RealtimeBuffer<std::shared_ptr<ResetFaultSrv::Request>>
+      std::vector<realtime_tools::RealtimeBuffer<
+          std::shared_ptr<ResetFaultSrv::Request>>>
           rt_reset_fault_srv_ptr_;
       rclcpp::Service<ResetFaultSrv>::SharedPtr reset_fault_srv_ptr_;
 
-      realtime_tools::RealtimeBuffer<std::shared_ptr<ResetFaultSrv::Request>>
+      std::vector<realtime_tools::RealtimeBuffer<
+          std::shared_ptr<ResetFaultSrv::Request>>>
           rt_start_homing_srv_ptr_;
       rclcpp::Service<ResetFaultSrv>::SharedPtr start_homing_srv_ptr_;
 

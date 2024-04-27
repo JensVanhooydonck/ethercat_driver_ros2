@@ -66,6 +66,12 @@ namespace ethercat_controllers {
     );
     reset_faults_.resize(dof_names_.size(), false);
 
+    rt_moo_srv_ptr_.resize(dof_names_.size());
+    rt_reset_fault_srv_ptr_.resize(dof_names_.size());
+    rt_start_homing_srv_ptr_.resize(dof_names_.size());
+
+    reset_homing_.resize(dof_names_.size(), false);
+
     try {
       // register data publisher
       drive_state_publisher_ = get_node()->create_publisher<DriveStateMsgType>(
@@ -160,40 +166,52 @@ namespace ethercat_controllers {
     }
 
     // getting the data from services using the rt pipe
-    auto moo_request = rt_moo_srv_ptr_.readFromRT();
-    auto reset_fault_request = rt_reset_fault_srv_ptr_.readFromRT();
-    auto start_homing_request = rt_start_homing_srv_ptr_.readFromRT();
 
     for (auto i = 0ul; i < dof_names_.size(); i++) {
+      auto moo_request = rt_moo_srv_ptr_[i].readFromRT();
+      auto reset_fault_request = rt_reset_fault_srv_ptr_[i].readFromRT();
+      auto start_homing_request = rt_start_homing_srv_ptr_[i].readFromRT();
       if (!moo_request || !(*moo_request)) {
         mode_ops_[i] = state_interfaces_[2 * i].get_value();
       } else {
-        if (dof_names_[i] == (*moo_request)->dof_name) {
-          mode_ops_[i] = (*moo_request)->mode_of_operation;
-        }
+        // if (dof_names_[i] == (*moo_request)->dof_name) {
+        std::cout << "Setting MOP dof: " << dof_names_[i] << std::endl;
+        mode_ops_[i] = (*moo_request)->mode_of_operation;
+        // if (mode_ops_[i] == state_interfaces_[2 * i].get_value()) {
+        rt_moo_srv_ptr_[i].reset();
+        command_interfaces_[3 * i + 1].set_value(mode_ops_[i]
+        ); // mode_of_operation
+           // }
+           // } else {
+           //   mode_ops_[i] = state_interfaces_[2 * i].get_value();
+           // }
       }
 
       if (reset_fault_request && (*reset_fault_request)) {
-        if (dof_names_[i] == (*reset_fault_request)->dof_name) {
-          reset_faults_[i] = true;
-          // rt_reset_fault_srv_ptr_.reset();
-          rt_reset_fault_srv_ptr_.writeFromNonRT(nullptr);
-        }
+        // if (dof_names_[i] == (*reset_fault_request)->dof_name) {
+        std::cout << "Resetting dof: " << dof_names_[i] << std::endl;
+        reset_faults_[i] = true;
+        // rt_reset_fault_srv_ptr_.reset();
+        rt_reset_fault_srv_ptr_[i].reset(); // writeFromNonRT(nullptr);
+        // }
       }
 
       if (start_homing_request && (*start_homing_request)) {
-        if (dof_names_[i] == (*start_homing_request)->dof_name) {
-          // int control_word = command_interfaces_[3 * i].get_value();
-          auto control = 0b00011111;
-          command_interfaces_[3 * i].set_value(control); // control_word
-          std::cout << "Homing started at dof: " << dof_names_[i] << std::endl;
-          // rt_start_homing_srv_ptr_.reset();
-          rt_start_homing_srv_ptr_.writeFromNonRT(nullptr);
-        }
+        // if (dof_names_[i] == (*start_homing_request)->dof_name) {
+        // int control_word = command_interfaces_[3 * i].get_value();
+        auto control = 0b00011111;
+        command_interfaces_[3 * i].set_value(control); // control_word
+        std::cout << "Homing started at dof: " << dof_names_[i] << std::endl;
+        // rt_start_homing_srv_ptr_.reset();
+        rt_start_homing_srv_ptr_[i].reset(); //.writeFromNonRT(nullptr);
+        reset_homing_[i] = true;
+        // }
+      } else if (reset_homing_[i]) {
+        auto control = 0b00001111;
+        command_interfaces_[3 * i].set_value(control); // control_word
+        reset_homing_[i] = false;
       }
 
-      command_interfaces_[3 * i + 1].set_value(mode_ops_[i]
-      ); // mode_of_operation
       command_interfaces_[3 * i + 2].set_value(reset_faults_[i]); // reset_fault
       reset_faults_[i] = false;
     }
@@ -253,7 +271,11 @@ namespace ethercat_controllers {
   ) {
     if (find(dof_names_.begin(), dof_names_.end(), request->dof_name) !=
         dof_names_.end()) {
-      rt_moo_srv_ptr_.writeFromNonRT(request);
+      for (auto i = 0ul; i < dof_names_.size(); i++) {
+        if (dof_names_[i] == request->dof_name) {
+          rt_moo_srv_ptr_[i].writeFromNonRT(request);
+        }
+      }
       response->return_message =
           "Request transmitted to drive at dof:" + request->dof_name;
     } else {
@@ -268,7 +290,11 @@ namespace ethercat_controllers {
   ) {
     if (find(dof_names_.begin(), dof_names_.end(), request->dof_name) !=
         dof_names_.end()) {
-      rt_reset_fault_srv_ptr_.writeFromNonRT(request);
+      for (auto i = 0ul; i < dof_names_.size(); i++) {
+        if (dof_names_[i] == request->dof_name) {
+          rt_reset_fault_srv_ptr_[i].writeFromNonRT(request);
+        }
+      }
       response->return_message =
           "Request transmitted to drive at dof:" + request->dof_name;
     } else {
@@ -283,7 +309,11 @@ namespace ethercat_controllers {
   ) {
     if (find(dof_names_.begin(), dof_names_.end(), request->dof_name) !=
         dof_names_.end()) {
-      rt_start_homing_srv_ptr_.writeFromNonRT(request);
+      for (auto i = 0ul; i < dof_names_.size(); i++) {
+        if (dof_names_[i] == request->dof_name) {
+          rt_start_homing_srv_ptr_[i].writeFromNonRT(request);
+        }
+      }
       response->return_message =
           "Requesting starting of homing at dof:" + request->dof_name;
     } else {
