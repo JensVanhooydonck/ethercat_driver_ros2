@@ -270,6 +270,8 @@ namespace ethercat_generic_plugins {
     case STATE_FAULT: // -> STATE_SWITCH_ON_DISABLED
       if (auto_fault_reset_ || fault_reset_) {
         fault_reset_ = false;
+        command_interface_ptr_->at(position_command_interface_index_) =
+            std::numeric_limits<double>::quiet_NaN(); // Clear command interface
         return (control_word & 0b11111111) | 0b10000000; // automatic reset
       } else {
         return control_word;
