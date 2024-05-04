@@ -46,7 +46,7 @@ namespace ethercat_interface {
       );
 
       /** call after adding all slaves, and before update */
-      void activate();
+      bool activate();
 
       /** perform one EtherCAT cycle, passing the domain to the slaves */
       virtual void update(uint32_t domain = 0);
