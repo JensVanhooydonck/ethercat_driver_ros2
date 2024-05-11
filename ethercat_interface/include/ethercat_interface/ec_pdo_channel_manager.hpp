@@ -203,6 +203,14 @@ namespace ethercat_interface {
           for_name = channel_config["for"].as<std::string>();
         }
 
+        if (channel_config["start"]) {
+          start = channel_config["start"].as<bool>();
+        }
+
+        if (channel_config["end"]) {
+          end = channel_config["end"].as<bool>();
+        }
+
         return true;
       }
 
@@ -242,6 +250,8 @@ namespace ethercat_interface {
       double factor = 1;
       double offset = 0;
       std::string for_name;
+      bool start = false;
+      bool end = false;
 
     private:
       std::vector<double> *command_interface_ptr_;
