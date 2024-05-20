@@ -28,55 +28,55 @@
 #include "ethercat_generic_plugins/generic_ec_slave.hpp"
 #include "ethercat_generic_plugins/cia402_common_defs.hpp"
 
-namespace ethercat_generic_plugins
-{
+namespace ethercat_generic_plugins {
 
-class EcCiA402Drive : public GenericEcSlave
-{
-public:
-  EcCiA402Drive();
-  virtual ~EcCiA402Drive();
-  /** Returns true if drive has reached "operation enabled" state.
-   *  The transition through the state machine is handled automatically. */
-  bool initialized() const;
+  class EcCiA402Drive : public GenericEcSlave {
+    public:
+      EcCiA402Drive();
+      virtual ~EcCiA402Drive();
+      /** Returns true if drive has reached "operation enabled" state.
+       *  The transition through the state machine is handled automatically. */
+      bool initialized() const;
 
-  virtual void processData(size_t index, uint8_t * domain_address);
+      virtual void processData(size_t index, uint8_t *domain_address);
 
-  virtual bool setupSlave(
-    std::unordered_map<std::string, std::string> slave_paramters,
-    std::vector<double> * state_interface,
-    std::vector<double> * command_interface,
-    const std::string& for_name = "");
+      virtual bool setupSlave(
+          std::unordered_map<std::string, std::string> slave_paramters,
+          std::vector<double> *state_interface,
+          std::vector<double> *command_interface,
+          const std::string &for_name = ""
+      );
 
-  int8_t mode_of_operation_display_ = 0;
-  int8_t mode_of_operation_ = -1;
+      int8_t mode_of_operation_display_ = 0;
+      int8_t mode_of_operation_ = -1;
 
-protected:
-  uint32_t counter_ = 0;
-  uint16_t last_status_word_ = -1;
-  uint16_t status_word_ = 0;
-  uint16_t control_word_ = 0;
-  DeviceState last_state_ = STATE_START;
-  DeviceState state_ = STATE_START;
-  bool initialized_ = false;
-  bool auto_fault_reset_ = false;
-  bool auto_state_transitions_ = true;
-  bool fault_reset_ = false;
-  int fault_reset_command_interface_index_ = -1;
-  int position_command_interface_index_ = -1;
-  bool last_fault_reset_command_ = false;
-  double previous_target_ = -1;
-  double last_position_ = std::numeric_limits<double>::quiet_NaN();
+    protected:
+      uint32_t counter_ = 0;
+      uint16_t last_status_word_ = -1;
+      uint16_t status_word_ = 0;
+      uint16_t control_word_ = 0;
+      DeviceState last_state_ = STATE_START;
+      DeviceState state_ = STATE_START;
+      bool initialized_ = false;
+      bool auto_fault_reset_ = false;
+      bool auto_state_transitions_ = true;
+      bool fault_reset_ = false;
+      int fault_reset_command_interface_index_ = -1;
+      int position_command_interface_index_ = -1;
+      bool last_fault_reset_command_ = false;
+      double previous_target_ = -1;
+      double last_position_ = std::numeric_limits<double>::quiet_NaN();
 
-  /** returns device state based upon the status_word */
-  DeviceState deviceState(uint16_t status_word);
-  /** returns the control word that will take device from state to next desired state */
-  uint16_t transition(DeviceState state, uint16_t control_word);
-  /** set up of the drive configuration from yaml node*/
-  bool setup_from_config(YAML::Node drive_config);
-  /** set up of the drive configuration from yaml file*/
-  bool setup_from_config_file(std::string config_file);
-};
-}  // namespace ethercat_generic_plugins
+      /** returns device state based upon the status_word */
+      DeviceState deviceState(uint16_t status_word);
+      /** returns the control word that will take device from state to next
+       * desired state */
+      uint16_t transition(DeviceState state, uint16_t control_word);
+      /** set up of the drive configuration from yaml node*/
+      bool setup_from_config(YAML::Node drive_config);
+      /** set up of the drive configuration from yaml file*/
+      bool setup_from_config_file(std::string config_file);
+  };
+} // namespace ethercat_generic_plugins
 
-#endif  // ETHERCAT_GENERIC_PLUGINS__GENERIC_EC_CIA402_DRIVE_HPP_
+#endif // ETHERCAT_GENERIC_PLUGINS__GENERIC_EC_CIA402_DRIVE_HPP_

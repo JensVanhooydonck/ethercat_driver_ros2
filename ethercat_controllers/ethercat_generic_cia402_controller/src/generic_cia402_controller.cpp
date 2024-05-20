@@ -211,7 +211,10 @@ namespace ethercat_controllers {
         command_interfaces_[3 * i].set_value(control); // control_word
         reset_homing_[i] = false;
       }
-
+      if (reset_faults_[i]) {
+        std::cout << "Setting reset fault to 1 for dof: " << dof_names_[i]
+                  << std::endl;
+      }
       command_interfaces_[3 * i + 2].set_value(reset_faults_[i]); // reset_fault
       reset_faults_[i] = false;
     }

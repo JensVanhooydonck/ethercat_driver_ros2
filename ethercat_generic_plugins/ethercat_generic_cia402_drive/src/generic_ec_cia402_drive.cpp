@@ -67,7 +67,9 @@ namespace ethercat_generic_plugins {
                     STATE_NEW_TARGET,
                     pdo_channels_info_[index].ec_read(domain_address)
                 );
-              } else if ((!std::isnan(target_position) || !std::isnan(previous_target_)) && previous_target_ != target_position) {
+              } else if ((!std::isnan(target_position) ||
+                          !std::isnan(previous_target_)) &&
+                         previous_target_ != target_position) {
                 previous_target_ = target_position;
                 pdo_channels_info_[index].default_value = transition(
                     STATE_NEW_TARGET_RESET,
@@ -84,7 +86,6 @@ namespace ethercat_generic_plugins {
     if (pdo_channels_info_[index].index == CiA402D_RPDO_POSITION) {
       if (mode_of_operation_display_ != ModeOfOperation::MODE_NO_MODE &&
           !std::isnan(last_position_)) {
-
         pdo_channels_info_[index].default_value =
             pdo_channels_info_[index].factor * last_position_ +
             pdo_channels_info_[index].offset;
@@ -104,7 +105,6 @@ namespace ethercat_generic_plugins {
         pdo_channels_info_[index].default_value = mode_of_operation_;
       }
     }
-
     pdo_channels_info_[index].ec_update(domain_address);
 
     // get mode_of_operation_display_
@@ -194,6 +194,9 @@ namespace ethercat_generic_plugins {
     if (drive_config["auto_fault_reset"]) {
       auto_fault_reset_ = drive_config["auto_fault_reset"].as<bool>();
     }
+    if (drive_config["fault_reset_on_start_up"]) {
+      fault_reset_ = drive_config["fault_reset_on_start_up"].as<bool>();
+    }
     if (drive_config["auto_state_transitions"]) {
       auto_state_transitions_ =
           drive_config["auto_state_transitions"].as<bool>();
@@ -262,6 +265,9 @@ namespace ethercat_generic_plugins {
     case STATE_NEW_TARGET_RESET:
       return control_word & 0b11101111;
     case STATE_OPERATION_ENABLED: // -> GOOD
+      if (fault_reset_) {
+        fault_reset_ = false;
+      }
       return control_word;
     case STATE_QUICK_STOP_ACTIVE: // -> STATE_OPERATION_ENABLED
       return (control_word & 0b01111111) | 0b00001111;
@@ -270,8 +276,40 @@ namespace ethercat_generic_plugins {
     case STATE_FAULT: // -> STATE_SWITCH_ON_DISABLED
       if (auto_fault_reset_ || fault_reset_) {
         fault_reset_ = false;
-        command_interface_ptr_->at(position_command_interface_index_) =
+        auto current_command =
+            command_interface_ptr_->at(position_command_interface_index_);
+        // command_interface_ptr_->at(position_command_interface_index_) =
+        //     std::numeric_limits<double>::quiet_NaN(); // Clear command
+        //     interface
+
+        last_position_ =
             std::numeric_limits<double>::quiet_NaN(); // Clear command interface
+        std::cerr << "EcCiA402Drive: Setting last_position_ tot NAN for DRIVE "
+                  << for_name_ << std::endl;
+        for (auto &channel : pdo_channels_info_) {
+          if (channel.index == CiA402D_RPDO_POSITION) {
+            channel.last_value = std::numeric_limits<double>::quiet_NaN();
+            channel.default_value = std::numeric_limits<double>::quiet_NaN();
+            std::cerr << "EcCiA402Drive: Setting last value tot NAN for DRIVE "
+                      << for_name_ << std::endl;
+          } else if (channel.index == CiA402D_TPDO_POSITION) {
+            std::cerr << "EcCiA402Drive: Current position "
+                      << channel.last_value << std::endl;
+            command_interface_ptr_->at(position_command_interface_index_) =
+                channel.last_value;
+          }
+        }
+        std::cerr
+            << "EcCiA402Drive: Setting command_interface_ptr_ tot current "
+               "for DRIVE "
+            << for_name_ << " Previous: " << current_command << std::endl;
+        std::cerr << "Now: "
+                  << command_interface_ptr_->at(
+                         position_command_interface_index_
+                     )
+                  << std::endl;
+        std::cerr << "EcCiA402Drive: RESETTING DRIVE " << for_name_
+                  << std::endl;
         return (control_word & 0b11111111) | 0b10000000; // automatic reset
       } else {
         return control_word;
