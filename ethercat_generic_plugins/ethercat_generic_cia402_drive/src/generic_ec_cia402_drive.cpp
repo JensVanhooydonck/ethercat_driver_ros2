@@ -167,6 +167,7 @@ namespace ethercat_generic_plugins {
 
     if (paramters_.find("mode_of_operation") != paramters_.end()) {
       mode_of_operation_ = std::stod(paramters_["mode_of_operation"]);
+      mode_of_operation_display_ = std::stod(paramters_["mode_of_operation"]);
     }
 
     if (paramters_.find("command_interface/reset_fault") != paramters_.end()) {
