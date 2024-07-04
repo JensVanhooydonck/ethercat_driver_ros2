@@ -51,9 +51,6 @@ public:
       EC_WRITE_U64(buffer, static_cast<uint64_t>(data));
     } else if (data_type == "int64") {
       EC_WRITE_S64(buffer, static_cast<int64_t>(data));
-    } else if (data_type == "real32" || data_type == "float") {
-      uint32_t raw = *(uint32_t *)(const void *)&doubledata;
-      EC_WRITE_U32(buffer, static_cast<uint32_t>(raw));
     }
   }
 
