@@ -38,7 +38,7 @@ namespace ethercat_interface {
       return;
     }
 
-    const ec_pdo_entry_reg_t empty = {0};
+    const ec_pdo_entry_reg_t empty = {0, 0, 0, 0, 0, 0, nullptr, nullptr};
     domain_regs.push_back(empty);
   }
 
@@ -59,9 +59,11 @@ namespace ethercat_interface {
   }
 
   EcMaster::~EcMaster() {
+    /*
     for (SlaveInfo &slave : slave_info_) {
-      //
+      // TODO verify what this piece of code was here for
     }
+    */
     for (auto &domain : domain_info_) {
       if (domain.second != NULL) {
         delete domain.second;
@@ -122,7 +124,7 @@ namespace ethercat_interface {
     for (auto &iter : domain_map) {
       // get the domain info, create if necessary
       uint32_t domain_index = iter.first;
-      DomainInfo * domain_info = NULL;
+      DomainInfo *domain_info = NULL;
       if (domain_info_.count(domain_index)) {
         domain_info = domain_info_.at(domain_index);
       }
@@ -208,7 +210,7 @@ namespace ethercat_interface {
     }
 
     // set the last element to null
-    ec_pdo_entry_reg_t empty = {0};
+    ec_pdo_entry_reg_t empty = {0, 0, 0, 0, 0, 0, nullptr, nullptr};
     domain_info->domain_regs.back() = empty;
   }
 
@@ -217,7 +219,9 @@ namespace ethercat_interface {
     for (auto &iter : domain_info_) {
       DomainInfo *domain_info = iter.second;
       if (domain_info == NULL) {
-        throw std::runtime_error("Null domain info: " + std::to_string(iter.first));
+        throw std::runtime_error(
+            "Null domain info: " + std::to_string(iter.first)
+        );
       }
       bool domain_status = ecrt_domain_reg_pdo_entry_list(
           domain_info->domain, &(domain_info->domain_regs[0])
@@ -255,7 +259,7 @@ namespace ethercat_interface {
     // receive process data
     ecrt_master_receive(master_);
 
-    DomainInfo * domain_info = domain_info_.at(domain);
+    DomainInfo *domain_info = domain_info_.at(domain);
     if (domain_info == NULL) {
       throw std::runtime_error("Null domain info: " + std::to_string(domain));
     }
@@ -296,7 +300,7 @@ namespace ethercat_interface {
     // receive process data
     ecrt_master_receive(master_);
 
-    DomainInfo * domain_info = domain_info_.at(domain);
+    DomainInfo *domain_info = domain_info_.at(domain);
     if (domain_info == NULL) {
       throw std::runtime_error("Null domain info: " + std::to_string(domain));
     }
@@ -323,7 +327,7 @@ namespace ethercat_interface {
   }
 
   void EcMaster::writeData(uint32_t domain) {
-    DomainInfo * domain_info = domain_info_.at(domain);
+    DomainInfo *domain_info = domain_info_.at(domain);
     if (domain_info == NULL) {
       throw std::runtime_error("Null domain info: " + std::to_string(domain));
     }
@@ -424,13 +428,13 @@ namespace ethercat_interface {
     /* Pre-fault our stack
         8*1024 is the maximum stack size
         which is guaranteed safe to access without faulting */
-    int MAX_SAFE_STACK = 8 * 1024;
+    constexpr unsigned int MAX_SAFE_STACK = 8 * 1024;
     unsigned char dummy[MAX_SAFE_STACK];
     memset(dummy, 0, MAX_SAFE_STACK);
   }
 
   void EcMaster::checkDomainState(uint32_t domain) {
-    DomainInfo * domain_info = domain_info_.at(domain);
+    DomainInfo *domain_info = domain_info_.at(domain);
     if (domain_info == NULL) {
       throw std::runtime_error("Null domain info: " + std::to_string(domain));
     }

@@ -119,6 +119,7 @@ namespace ethercat_interface {
                    type == "real64") {
           return 8;
         }
+        return 0;
       }
   };
 

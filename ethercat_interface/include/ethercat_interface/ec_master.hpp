@@ -159,7 +159,7 @@ namespace ethercat_interface {
       struct SlaveInfo {
           EcSlave *slave = NULL;
           ec_slave_config_t *config = NULL;
-          ec_slave_config_state_t config_state = {0};
+          ec_slave_config_state_t config_state = {0, 0, 0};
           uint16_t alias;
           uint16_t position;
       };

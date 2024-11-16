@@ -30,6 +30,7 @@ size_t type2bytes(std::string type) {
              type == "double") {
     return 8;
   }
+  return 0;
 }
 
 namespace ethercat_generic_plugins {
@@ -64,10 +65,12 @@ namespace ethercat_generic_plugins {
       syncs_.push_back({0, EC_DIR_OUTPUT, 0, NULL, EC_WD_DISABLE});
       syncs_.push_back({1, EC_DIR_INPUT, 0, NULL, EC_WD_DISABLE});
       syncs_.push_back(
-          {2, EC_DIR_OUTPUT, rpdos_.size(), rpdos_.data(), EC_WD_ENABLE}
+          {2, EC_DIR_OUTPUT, (unsigned int)(rpdos_.size()), rpdos_.data(),
+           EC_WD_ENABLE}
       );
       syncs_.push_back(
-          {3, EC_DIR_INPUT, tpdos_.size(), tpdos_.data(), EC_WD_DISABLE}
+          {3, EC_DIR_INPUT, (unsigned int)(tpdos_.size()), tpdos_.data(),
+           EC_WD_DISABLE}
       );
     } else {
       for (auto &sm : sm_configs_) {
@@ -75,16 +78,18 @@ namespace ethercat_generic_plugins {
           syncs_.push_back({sm.index, sm.type, 0, NULL, sm.watchdog});
         } else if (sm.pdo_name == "rpdo") {
           syncs_.push_back(
-              {sm.index, sm.type, rpdos_.size(), rpdos_.data(), sm.watchdog}
+              {sm.index, sm.type, (unsigned int)(rpdos_.size()), rpdos_.data(),
+               sm.watchdog}
           );
         } else if (sm.pdo_name == "tpdo") {
           syncs_.push_back(
-              {sm.index, sm.type, tpdos_.size(), tpdos_.data(), sm.watchdog}
+              {sm.index, sm.type, (unsigned int)(tpdos_.size()), tpdos_.data(),
+               sm.watchdog}
           );
         }
       }
     }
-    syncs_.push_back({0xff});
+    syncs_.push_back({0xff, EC_DIR_INVALID, 0, nullptr, EC_WD_DISABLE});
   }
 
   bool GenericEcSlave::setupSlave(
@@ -180,7 +185,8 @@ namespace ethercat_generic_plugins {
           }
           rpdos_.push_back(
               {slave_config["rpdo"][i]["index"].as<uint16_t>(),
-               rpdo_channels_size, all_channels_.data() + channels_nbr}
+               (unsigned int)(rpdo_channels_size),
+               all_channels_.data() + channels_nbr}
           );
           channels_nbr += rpdo_channels_size;
         }
@@ -200,7 +206,8 @@ namespace ethercat_generic_plugins {
           }
           tpdos_.push_back(
               {slave_config["tpdo"][i]["index"].as<uint16_t>(),
-               tpdo_channels_size, all_channels_.data() + channels_nbr}
+               (unsigned int)(tpdo_channels_size),
+               all_channels_.data() + channels_nbr}
           );
           channels_nbr += tpdo_channels_size;
         }
