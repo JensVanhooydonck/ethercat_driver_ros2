@@ -19,6 +19,7 @@
 
 #include <ecrt.h>
 #include <string>
+#include <cstring> // Include for memcpy
 #include <vector>
 #include <limits>
 
@@ -82,10 +83,12 @@ namespace ethercat_interface {
         if (sdo_config["value"]) {
           if (data_type == "float" || data_type == "real32") {
             float floatvalue = sdo_config["value"].as<float>();
-            data = *(int *)&floatvalue;
+            // data = *(int *)&floatvalue;
+            memcpy(&data, &floatvalue, sizeof(floatvalue));
           } else if (data_type == "double" || data_type == "real64") {
             float doublevalue = sdo_config["value"].as<double>();
-            data = *(int *)&doublevalue;
+            // data = *(int *)&doublevalue;
+            memcpy(&data, &doublevalue, sizeof(doublevalue));
           } else {
             data = sdo_config["value"].as<int>();
           }
