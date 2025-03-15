@@ -322,7 +322,7 @@ namespace ethercat_generic_plugins {
             std::cerr << "EcCiA402Drive: Current position "
                       << channel.last_value << std::endl;
             command_interface_ptr_->at(position_command_interface_index_) =
-                channel.last_value;
+                std::numeric_limits<double>::quiet_NaN(); // channel.last_value;
           }
         }
         std::cerr
