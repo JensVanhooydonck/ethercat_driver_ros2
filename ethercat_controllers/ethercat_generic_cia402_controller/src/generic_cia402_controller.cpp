@@ -198,9 +198,9 @@ namespace ethercat_controllers {
 
       if (start_homing_request && (*start_homing_request)) {
         // if (dof_names_[i] == (*start_homing_request)->dof_name) {
-        uint16_t control_word = command_interfaces_[3 * i].get_value();
-        // auto control = 0b00011111;
-        control_word = control_word | 0b00010000;
+        // uint16_t control_word = command_interfaces_[3 * i].get_value();
+        auto control_word = 0b00011111;
+        // control_word = control_word | 0b00010000;
         command_interfaces_[3 * i].set_value(control_word); // control_word
         std::cout << "Homing started at dof: " << dof_names_[i] << std::endl;
         // rt_start_homing_srv_ptr_.reset();
