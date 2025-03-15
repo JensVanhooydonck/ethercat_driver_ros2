@@ -295,7 +295,7 @@ namespace ethercat_generic_plugins {
     case STATE_FAULT_REACTION_ACTIVE: // -> STATE_FAULT (automatic)
       return control_word;
     case STATE_FAULT: // -> STATE_SWITCH_ON_DISABLED
-      if (auto_fault_reset_ || fault_reset_) {
+      if (auto_fault_reset_ || fault_reset_ || fault_reset_timer_ > 0) {
         fault_reset_ = false;
         auto current_command =
             command_interface_ptr_->at(position_command_interface_index_);
@@ -332,7 +332,7 @@ namespace ethercat_generic_plugins {
         std::cerr << "EcCiA402Drive: RESETTING DRIVE " << for_name_
                   << std::endl;
         fault_reset_timer_ += 1;
-        if (fault_reset_timer_ > 1000) {
+        if (fault_reset_timer_ > 100) {
           fault_reset_timer_ = 0;
           return (control_word & 0b01111111); // set automatic reset to 0
         }
