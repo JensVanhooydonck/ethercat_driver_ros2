@@ -84,24 +84,19 @@ namespace ethercat_generic_plugins {
 
       // if homing, reset cmd interface to nan
       if (mode_of_operation_ == ModeOfOperation::MODE_HOMING) {
-        auto current_command =
-            command_interface_ptr_->at(position_command_interface_index_);
-
-        last_position_ =
-            std::numeric_limits<double>::quiet_NaN(); // Clear command interface
-        std::cerr << "EcCiA402Drive: Setting last_position_ tot NAN for DRIVE "
+        last_position_ = 0; // Set command interface to 0
+        std::cerr << "EcCiA402Drive: Setting last_position_ tot 0 for DRIVE "
                   << for_name_ << std::endl;
         for (auto &channel : pdo_channels_info_) {
           if (channel.index == CiA402D_RPDO_POSITION) {
-            channel.last_value = std::numeric_limits<double>::quiet_NaN();
-            channel.default_value = std::numeric_limits<double>::quiet_NaN();
+            channel.last_value = 0;
+            channel.default_value = 0;
             std::cerr << "EcCiA402Drive: Setting last value tot NAN for DRIVE "
                       << for_name_ << std::endl;
           } else if (channel.index == CiA402D_TPDO_POSITION) {
             std::cerr << "EcCiA402Drive: Current position "
                       << channel.last_value << std::endl;
-            command_interface_ptr_->at(position_command_interface_index_) =
-                channel.last_value;
+            command_interface_ptr_->at(position_command_interface_index_) = 0;
           }
         }
       }
