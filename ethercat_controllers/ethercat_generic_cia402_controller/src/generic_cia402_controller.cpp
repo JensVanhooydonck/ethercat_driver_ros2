@@ -198,17 +198,21 @@ namespace ethercat_controllers {
 
       if (start_homing_request && (*start_homing_request)) {
         // if (dof_names_[i] == (*start_homing_request)->dof_name) {
-        // int control_word = command_interfaces_[3 * i].get_value();
-        auto control = 0b00011111;
-        command_interfaces_[3 * i].set_value(control); // control_word
+        uint16_t control_word = command_interfaces_[3 * i].get_value();
+        // auto control = 0b00011111;
+        control_word = control_word |
+            0b00010000 command_interfaces_[3 * i].set_value(control_word
+            ); // control_word
         std::cout << "Homing started at dof: " << dof_names_[i] << std::endl;
         // rt_start_homing_srv_ptr_.reset();
         rt_start_homing_srv_ptr_[i].reset(); //.writeFromNonRT(nullptr);
         reset_homing_[i] = true;
         // }
       } else if (reset_homing_[i]) {
-        auto control = 0b00001111;
-        command_interfaces_[3 * i].set_value(control); // control_word
+        uint16_t control_word = command_interfaces_[3 * i].get_value();
+        uint16_t control_word = control_word & 0b11101111;
+        // auto control = 0b00001111;
+        command_interfaces_[3 * i].set_value(control_word); // control_word
         reset_homing_[i] = false;
       }
       if (reset_faults_[i]) {
