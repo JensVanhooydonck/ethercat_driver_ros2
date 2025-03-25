@@ -111,11 +111,12 @@ namespace ethercat_controllers {
   CiA402Controller::command_interface_configuration() const {
     controller_interface::InterfaceConfiguration conf;
     conf.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-    conf.names.reserve(dof_names_.size() * 3);
+    conf.names.reserve(dof_names_.size() * 4);
     for (const auto &dof_name : dof_names_) {
       conf.names.push_back(dof_name + "/" + "control_word");
       conf.names.push_back(dof_name + "/" + "mode_of_operation");
       conf.names.push_back(dof_name + "/" + "reset_fault");
+      conf.names.push_back(dof_name + "/" + "start_homing");
     }
     return conf;
   }
@@ -179,7 +180,7 @@ namespace ethercat_controllers {
         mode_ops_[i] = (*moo_request)->mode_of_operation;
         // if (mode_ops_[i] == state_interfaces_[2 * i].get_value()) {
         rt_moo_srv_ptr_[i].reset();
-        command_interfaces_[3 * i + 1].set_value(mode_ops_[i]
+        bool done = command_interfaces_[4 * i + 1].set_value(mode_ops_[i]
         ); // mode_of_operation
            // }
            // } else {
@@ -197,29 +198,56 @@ namespace ethercat_controllers {
       }
 
       if (start_homing_request && (*start_homing_request)) {
-        // if (dof_names_[i] == (*start_homing_request)->dof_name) {
-        // uint16_t control_word = command_interfaces_[3 * i].get_value();
-        auto control_word = 0b00011111;
-        // control_word = control_word | 0b00010000;
-        command_interfaces_[3 * i].set_value(control_word); // control_word
-        std::cout << "Homing started at dof: " << dof_names_[i] << std::endl;
-        // rt_start_homing_srv_ptr_.reset();
-        rt_start_homing_srv_ptr_[i].reset(); //.writeFromNonRT(nullptr);
+        // if (dof_names_[i] == (*reset_fault_request)->dof_name) {
+        std::cout << "Starting homing of dof: " << dof_names_[i] << std::endl;
         reset_homing_[i] = true;
+        // rt_reset_fault_srv_ptr_.reset();
+        rt_start_homing_srv_ptr_[i].reset(); // writeFromNonRT(nullptr);
         // }
-      } else if (reset_homing_[i]) {
-        uint16_t control_word = command_interfaces_[3 * i].get_value();
-        control_word = control_word & 0b11101111;
-        // auto control = 0b00001111;
-        command_interfaces_[3 * i].set_value(control_word); // control_word
-        reset_homing_[i] = false;
+        //   auto moop = state_interfaces_[2 * i].get_value();
+        //   auto status_word = state_interfaces_[2 * i + 1].get_value();
+        //   if (moop == 6) {
+        //     // if (dof_names_[i] == (*start_homing_request)->dof_name) {
+        //     uint16_t control_word = command_interfaces_[4 * i].get_value();
+        //     std::cout << "Homing[" << moop << "] dof: " << dof_names_[i]
+        //               << " CW: " << control_word << " SW: " << status_word
+        //               << std::endl;
+        //     // auto control_word = 0b00011111;
+        //     control_word = control_word | 0b00010000;
+        //     bool done = command_interfaces_[4 * i].set_value(control_word
+        //     ); // control_word
+        //     std::cout << "Homing started at dof: " << dof_names_[i]
+        //               << " done: " << done << std::endl;
+        //     // rt_start_homing_srv_ptr_.reset();
+        //     rt_start_homing_srv_ptr_[i].reset(); //.writeFromNonRT(nullptr);
+        //     reset_homing_[i] = true;
+        //   } else {
+        //     std::cout << "Not in homing mode: [" << moop << "]" << std::endl;
+        //   }
+        //   // }
+        // } else if (reset_homing_[i]) {
+        //   uint16_t control_word = command_interfaces_[4 * i].get_value();
+        //   control_word = control_word & 0b11101111;
+        //   // auto control = 0b00001111;
+        //   bool done =
+        //       command_interfaces_[4 * i].set_value(control_word); //
+        //       control_word
+        //   reset_homing_[i] = false;
       }
       if (reset_faults_[i]) {
         std::cout << "Setting reset fault to 1 for dof: " << dof_names_[i]
                   << std::endl;
+        bool reset = command_interfaces_[4 * i + 2].set_value(reset_faults_[i]
+        ); // reset_fault
+        reset_faults_[i] = false;
       }
-      command_interfaces_[3 * i + 2].set_value(reset_faults_[i]); // reset_fault
-      reset_faults_[i] = false;
+      if (reset_homing_[i]) {
+        std::cout << "Setting start homing to 1 for dof: " << dof_names_[i]
+                  << std::endl;
+        bool reset = command_interfaces_[4 * i + 3].set_value(reset_homing_[i]
+        ); // start_homing
+        reset_homing_[i] = false;
+      }
     }
 
     return controller_interface::return_type::OK;

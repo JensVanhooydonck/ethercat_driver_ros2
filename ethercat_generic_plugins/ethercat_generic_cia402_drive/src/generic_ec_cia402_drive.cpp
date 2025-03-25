@@ -80,26 +80,91 @@ namespace ethercat_generic_plugins {
             }
           }
         }
-      }
 
-      // if homing, reset cmd interface to nan
-      if (mode_of_operation_ == ModeOfOperation::MODE_HOMING) {
-        last_position_ = 0; // Set command interface to 0
-        std::cerr << "EcCiA402Drive: Setting last_position_ tot 0 for DRIVE "
-                  << for_name_ << std::endl;
-        for (auto &channel : pdo_channels_info_) {
-          if (channel.index == CiA402D_RPDO_POSITION) {
-            channel.last_value = 0;
-            channel.default_value = 0;
-            std::cerr << "EcCiA402Drive: Setting last value tot NAN for DRIVE "
-                      << for_name_ << std::endl;
-          } else if (channel.index == CiA402D_TPDO_POSITION) {
-            std::cerr << "EcCiA402Drive: Current position "
-                      << channel.last_value << std::endl;
-            command_interface_ptr_->at(position_command_interface_index_) = 0;
+        if (mode_of_operation_display_ == ModeOfOperation::MODE_HOMING) {
+          // Also check if start_homing is triggerd
+          if (start_homing_command_interface_index_ >= 0) {
+            if (command_interface_ptr_->at(start_homing_command_interface_index_
+                ) != 0) {
+              std::cerr << "EcCiA402Drive: Homing triggerd " << std::endl;
+              // Start homing is triggerd. We will only remove this when we
+              // actualy trigger the homing.
+              if (state_ == STATE_OPERATION_ENABLED) {
+                // Get if already running, if so reset to 0
+                // check if bit 10 is set, set = not running, not set = running
+                bool set =
+                    (status_word_ & 0b0000010000000000) == 0b0000010000000000;
+                if (set) {
+                  std::cerr
+                      << "EcCiA402Drive: Transitioning to new homing target "
+                      << std::endl;
+                  pdo_channels_info_[index].default_value = transition(
+                      STATE_NEW_TARGET,
+                      pdo_channels_info_[index].ec_read(domain_address)
+                  );
+                  command_interface_ptr_->at(
+                      start_homing_command_interface_index_
+                  ) = 0;
+                } else {
+                  std::cerr << "EcCiA402Drive: Homing already running "
+                            << std::endl;
+                  pdo_channels_info_[index].default_value = transition(
+                      STATE_NEW_TARGET_RESET,
+                      pdo_channels_info_[index].ec_read(domain_address)
+                  );
+                }
+
+                // last_position_ = 0; // Set command interface to 0
+                // std::cerr
+                //     << "EcCiA402Drive: Setting last_position_ tot 0 for DRIVE
+                //     "
+                //     << for_name_ << std::endl;
+                // for (auto &channel : pdo_channels_info_) {
+                //   if (channel.index == CiA402D_RPDO_POSITION) {
+                //     channel.last_value = 0;
+                //     channel.default_value = 0;
+                //     std::cerr << "EcCiA402Drive: Setting last value tot NAN "
+                //                  "for DRIVE "
+                //               << for_name_ << std::endl;
+                //   } else if (channel.index == CiA402D_TPDO_POSITION) {
+                //     std::cerr << "EcCiA402Drive: Current position "
+                //               << channel.last_value << std::endl;
+                //     command_interface_ptr_->at(position_command_interface_index_
+                //     ) = 0;
+                //   }
+                // }
+              }
+              // } else {
+              //   pdo_channels_info_[index].default_value = transition(
+              //       STATE_NEW_TARGET_RESET,
+              //       pdo_channels_info_[index].ec_read(domain_address)
+              //   );
+              // }
+            }
           }
         }
       }
+
+      // if homing, reset cmd interface to nan
+      // if (mode_of_operation_display_ == ModeOfOperation::MODE_HOMING) {
+      //   last_position_ = 0; // Set command interface to 0
+      //   std::cerr << "EcCiA402Drive: Setting last_position_ tot 0 for DRIVE "
+      //             << for_name_ << std::endl;
+      //   for (auto &channel : pdo_channels_info_) {
+      //     if (channel.index == CiA402D_RPDO_POSITION) {
+      //       channel.last_value = 0;
+      //       channel.default_value = 0;
+      //       std::cerr << "EcCiA402Drive: Setting last value tot NAN for DRIVE
+      //       "
+      //                 << for_name_ << std::endl;
+      //     } else if (channel.index == CiA402D_TPDO_POSITION) {
+      //       std::cerr << "EcCiA402Drive: Current position "
+      //                 << channel.last_value << std::endl;
+      //       command_interface_ptr_->at(position_command_interface_index_) =
+      //       0;
+      //     }
+      //   }
+      // }
     }
 
     // setup current position as default position
@@ -192,6 +257,12 @@ namespace ethercat_generic_plugins {
     if (paramters_.find("command_interface/reset_fault") != paramters_.end()) {
       fault_reset_command_interface_index_ =
           std::stoi(paramters_["command_interface/reset_fault"]);
+    }
+
+    if (paramters_.find("command_interface/start_homing") != paramters_.end()) {
+      start_homing_command_interface_index_ =
+          std::stoi(paramters_["command_interface/start_homing"]);
+      std::cerr << "EcCiA402Drive: Setup start homing index." << std::endl;
     }
 
     if (paramters_.find("command_interface/position") != paramters_.end()) {

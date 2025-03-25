@@ -63,6 +63,7 @@ namespace ethercat_generic_plugins {
       bool fault_reset_ = false;
       uint16_t fault_reset_timer_ = 0;
       int fault_reset_command_interface_index_ = -1;
+      int start_homing_command_interface_index_ = -1;
       int position_command_interface_index_ = -1;
       bool last_fault_reset_command_ = false;
       double previous_target_ = -1;
