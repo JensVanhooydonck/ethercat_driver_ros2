@@ -50,8 +50,8 @@ namespace ethercat_controllers {
     return CallbackReturn::SUCCESS;
   }
 
-  CallbackReturn CiA402Controller::on_configure(const rclcpp_lifecycle::State
-                                                    & /*previous_state*/) {
+  CallbackReturn CiA402Controller::
+      on_configure(const rclcpp_lifecycle::State & /*previous_state*/) {
     // getting the names of the dofs to be controlled
     dof_names_ = get_node()->get_parameter("dofs").as_string_array();
 
@@ -133,13 +133,13 @@ namespace ethercat_controllers {
     return conf;
   }
 
-  CallbackReturn CiA402Controller::on_activate(const rclcpp_lifecycle::State
-                                                   & /*previous_state*/) {
+  CallbackReturn CiA402Controller::
+      on_activate(const rclcpp_lifecycle::State & /*previous_state*/) {
     return CallbackReturn::SUCCESS;
   }
 
-  CallbackReturn CiA402Controller::on_deactivate(const rclcpp_lifecycle::State
-                                                     & /*previous_state*/) {
+  CallbackReturn CiA402Controller::
+      on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) {
     return CallbackReturn::SUCCESS;
   }
 
@@ -180,7 +180,8 @@ namespace ethercat_controllers {
         mode_ops_[i] = (*moo_request)->mode_of_operation;
         // if (mode_ops_[i] == state_interfaces_[2 * i].get_value()) {
         rt_moo_srv_ptr_[i].reset();
-        bool done = command_interfaces_[4 * i + 1].set_value(mode_ops_[i]
+        command_interfaces_[4 * i + 1].set_value(
+            static_cast<double>(mode_ops_[i])
         ); // mode_of_operation
            // }
            // } else {
@@ -237,14 +238,16 @@ namespace ethercat_controllers {
       if (reset_faults_[i]) {
         std::cout << "Setting reset fault to 1 for dof: " << dof_names_[i]
                   << std::endl;
-        bool reset = command_interfaces_[4 * i + 2].set_value(reset_faults_[i]
+        command_interfaces_[4 * i + 2].set_value(
+            static_cast<double>(reset_faults_[i])
         ); // reset_fault
         reset_faults_[i] = false;
       }
       if (reset_homing_[i]) {
         std::cout << "Setting start homing to 1 for dof: " << dof_names_[i]
                   << std::endl;
-        bool reset = command_interfaces_[4 * i + 3].set_value(reset_homing_[i]
+        command_interfaces_[4 * i + 3].set_value(
+            static_cast<double>(reset_homing_[i])
         ); // start_homing
         reset_homing_[i] = false;
       }
@@ -275,8 +278,8 @@ namespace ethercat_controllers {
   }
 
   /** returns mode str based upon the mode_of_operation value */
-  std::string CiA402Controller::mode_of_operation_str(double mode_of_operation
-  ) {
+  std::string
+  CiA402Controller::mode_of_operation_str(double mode_of_operation) {
     if (mode_of_operation == 0) {
       return "MODE_NO_MODE";
     } else if (mode_of_operation == 1) {
