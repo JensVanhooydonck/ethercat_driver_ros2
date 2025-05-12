@@ -31,7 +31,7 @@ namespace ethercat_generic_plugins {
 
   void EcCiA402Drive::processData(size_t index, uint8_t *domain_address) {
     // Special case: ControlWord
-    if (pdo_channels_info_[index].index == CiA402D_RPDO_CONTROLWORD) {
+    if (pdo_channels_info_[index].index == CiA402D_RPDO_CONTROLWORD + pdo_offset) {
       if (is_operational_) {
         if (fault_reset_command_interface_index_ >= 0) {
           if (command_interface_ptr_->at(fault_reset_command_interface_index_
@@ -119,13 +119,13 @@ namespace ethercat_generic_plugins {
                     << "EcCiA402Drive: Setting last_position_ tot 0 for DRIVE"
                     << for_name_ << std::endl;
                 for (auto &channel : pdo_channels_info_) {
-                  if (channel.index == CiA402D_RPDO_POSITION) {
+                  if (channel.index == CiA402D_RPDO_POSITION + pdo_offset) {
                     channel.last_value = 0;
                     channel.default_value = 0;
                     std::cerr << "EcCiA402Drive: Setting last value tot NAN "
                                  "for DRIVE "
                               << for_name_ << std::endl;
-                  } else if (channel.index == CiA402D_TPDO_POSITION) {
+                  } else if (channel.index == CiA402D_TPDO_POSITION + pdo_offset) {
                     std::cerr << "EcCiA402Drive: Current position "
                               << channel.last_value << std::endl;
                     command_interface_ptr_->at(position_command_interface_index_
@@ -167,7 +167,7 @@ namespace ethercat_generic_plugins {
     }
 
     // setup current position as default position
-    if (pdo_channels_info_[index].index == CiA402D_RPDO_POSITION) {
+    if (pdo_channels_info_[index].index == CiA402D_RPDO_POSITION + pdo_offset) {
       if (mode_of_operation_display_ != ModeOfOperation::MODE_NO_MODE &&
           !std::isnan(last_position_)) {
         pdo_channels_info_[index].default_value =
@@ -184,7 +184,7 @@ namespace ethercat_generic_plugins {
     }
 
     // setup mode of operation
-    if (pdo_channels_info_[index].index == CiA402D_RPDO_MODE_OF_OPERATION) {
+    if (pdo_channels_info_[index].index == CiA402D_RPDO_MODE_OF_OPERATION + pdo_offset) {
       if (mode_of_operation_ >= 0 && mode_of_operation_ <= 10) {
         pdo_channels_info_[index].default_value = mode_of_operation_;
       }
@@ -193,16 +193,16 @@ namespace ethercat_generic_plugins {
 
     // get mode_of_operation_display_
     if (pdo_channels_info_[index].index ==
-        CiA402D_TPDO_MODE_OF_OPERATION_DISPLAY) {
+        CiA402D_TPDO_MODE_OF_OPERATION_DISPLAY + pdo_offset) {
       mode_of_operation_display_ = pdo_channels_info_[index].last_value;
     }
 
-    if (pdo_channels_info_[index].index == CiA402D_TPDO_POSITION) {
+    if (pdo_channels_info_[index].index == CiA402D_TPDO_POSITION + pdo_offset) {
       last_position_ = pdo_channels_info_[index].last_value;
     }
 
     // Special case: StatusWord
-    if (pdo_channels_info_[index].index == CiA402D_TPDO_STATUSWORD) {
+    if (pdo_channels_info_[index].index == CiA402D_TPDO_STATUSWORD + pdo_offset) {
       status_word_ = pdo_channels_info_[index].last_value;
     }
 
@@ -290,6 +290,9 @@ namespace ethercat_generic_plugins {
     if (drive_config["auto_state_transitions"]) {
       auto_state_transitions_ =
           drive_config["auto_state_transitions"].as<bool>();
+    }
+    if (drive_config["pdo_offset"]) {
+      pdo_offset = drive_config["pdo_offset"].as<uint16_t>();
     }
     return true;
   }

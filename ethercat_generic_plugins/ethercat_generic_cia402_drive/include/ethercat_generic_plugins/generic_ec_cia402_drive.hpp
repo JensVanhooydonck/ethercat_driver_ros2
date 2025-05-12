@@ -68,6 +68,7 @@ namespace ethercat_generic_plugins {
       bool last_fault_reset_command_ = false;
       double previous_target_ = -1;
       double last_position_ = std::numeric_limits<double>::quiet_NaN();
+      uint16_t pdo_offset = 0x0000;
 
       /** returns device state based upon the status_word */
       DeviceState deviceState(uint16_t status_word);
