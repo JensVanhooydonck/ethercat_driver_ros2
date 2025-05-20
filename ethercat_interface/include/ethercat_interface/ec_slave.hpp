@@ -53,14 +53,12 @@ public:
   virtual void domains(DomainMap & /*domains*/) const {}
   virtual bool setupSlave(
     std::unordered_map<std::string, std::string> slave_paramters,
-    std::vector<double> * state_interface,
-    std::vector<double> * command_interface,
-    const std::string& for_name = "")
+    std::unordered_map<std::string, std::vector<double>*> joint_state_interfaces,
+    std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces)
   {
-    state_interface_ptr_ = state_interface;
-    command_interface_ptr_ = command_interface;
+    joint_state_interfaces_ = joint_state_interfaces;
+    joint_command_interfaces_ = joint_command_interfaces;
     paramters_ = slave_paramters;
-    for_name_ = for_name;
     return true;
   }
   uint32_t vendor_id_;
@@ -69,10 +67,11 @@ public:
   std::vector<SdoConfigEntry> sdo_config;
 
 protected:
-  std::vector<double> * state_interface_ptr_;
-  std::vector<double> * command_interface_ptr_;
+  // std::vector<double> * state_interface_ptr_;
+  // std::vector<double> * command_interface_ptr_;
+  std::unordered_map<std::string, std::vector<double>*> joint_state_interfaces_;
+  std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces_;
   std::unordered_map<std::string, std::string> paramters_;
-  std::string for_name_;
   bool is_operational_ = false;
 };
 }  // namespace ethercat_interface

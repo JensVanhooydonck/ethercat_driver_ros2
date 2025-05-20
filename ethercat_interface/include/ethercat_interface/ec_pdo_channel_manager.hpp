@@ -226,6 +226,10 @@ namespace ethercat_interface {
           end = channel_config["end"].as<bool>();
         }
 
+        if (channel_config["pdo_offset"]) {
+          pdo_offset = channel_config["pdo_offset"].as<uint16_t>();
+        }
+
         return true;
       }
 
@@ -272,6 +276,8 @@ namespace ethercat_interface {
       std::string for_name;
       bool start = false;
       bool end = false;
+      uint16_t pdo_offset = 0x0000;
+
 
     private:
       std::vector<double> *command_interface_ptr_;

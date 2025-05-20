@@ -43,9 +43,8 @@ namespace ethercat_generic_plugins {
 
       virtual bool setupSlave(
           std::unordered_map<std::string, std::string> slave_paramters,
-          std::vector<double> *state_interface,
-          std::vector<double> *command_interface,
-          const std::string &for_name = ""
+          std::unordered_map<std::string, std::vector<double>*> joint_state_interfaces,
+          std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces
       );
 
     protected:

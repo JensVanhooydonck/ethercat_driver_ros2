@@ -94,13 +94,12 @@ namespace ethercat_generic_plugins {
 
   bool GenericEcSlave::setupSlave(
       std::unordered_map<std::string, std::string> slave_paramters,
-      std::vector<double> *state_interface,
-      std::vector<double> *command_interface, const std::string &for_name
-  ) {
-    state_interface_ptr_ = state_interface;
-    command_interface_ptr_ = command_interface;
+      std::unordered_map<std::string, std::vector<double>*> joint_state_interfaces,
+      std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces)
+    {
+    joint_state_interfaces_ = joint_state_interfaces;
+    joint_command_interfaces_ = joint_command_interfaces;
     paramters_ = slave_paramters;
-    for_name_ = for_name;
 
     if (paramters_.find("slave_config") != paramters_.end()) {
       if (!setup_from_config_file(paramters_["slave_config"])) {
@@ -178,8 +177,16 @@ namespace ethercat_generic_plugins {
           for (auto c = 0ul; c < rpdo_channels_size; c++) {
             ethercat_interface::EcPdoChannelManager channel_info;
             channel_info.pdo_type = ethercat_interface::RPDO;
+            if (slave_config["rpdo"][i]["for"]) {
+              channel_info.for_name =
+                  slave_config["rpdo"][i]["for"].as<std::string>();
+            }
             channel_info.load_from_config(slave_config["rpdo"][i]["channels"][c]
             );
+            if (slave_config["rpdo"][i]["pdo_offset"]) {
+              channel_info.pdo_offset =
+                  slave_config["rpdo"][i]["pdo_offset"].as<uint16_t>();
+            }
             pdo_channels_info_.push_back(channel_info);
             all_channels_.push_back(channel_info.get_pdo_entry_info());
           }
@@ -199,8 +206,16 @@ namespace ethercat_generic_plugins {
           for (auto c = 0ul; c < tpdo_channels_size; c++) {
             ethercat_interface::EcPdoChannelManager channel_info;
             channel_info.pdo_type = ethercat_interface::TPDO;
+            if (slave_config["tpdo"][i]["for"]) {
+              channel_info.for_name =
+                  slave_config["tpdo"][i]["for"].as<std::string>();
+            }
             channel_info.load_from_config(slave_config["tpdo"][i]["channels"][c]
             );
+            if (slave_config["tpdo"][i]["pdo_offset"]) {
+              channel_info.pdo_offset =
+                  slave_config["tpdo"][i]["pdo_offset"].as<uint16_t>();
+            }
             pdo_channels_info_.push_back(channel_info);
             all_channels_.push_back(channel_info.get_pdo_entry_info());
           }
@@ -251,35 +266,66 @@ namespace ethercat_generic_plugins {
   void GenericEcSlave::setup_interface_mapping() {
     for (auto &channel : pdo_channels_info_) {
 
-      if (channel.for_name.empty() ||
-          (!for_name_.empty() && channel.for_name == for_name_)) {
-        if (channel.pdo_type == ethercat_interface::TPDO) {
-          if (paramters_.find("state_interface/" + channel.interface_name) !=
-              paramters_.end()) {
-            channel.interface_index = std::stoi(
-                paramters_["state_interface/" + channel.interface_name]
-            );
-          }
-        }
-        if (channel.pdo_type == ethercat_interface::RPDO) {
-          if (paramters_.find("command_interface/" + channel.interface_name) !=
-              paramters_.end()) {
-            channel.interface_index = std::stoi(
-                paramters_["command_interface/" + channel.interface_name]
-            );
-            if (channel.read &&
-                paramters_.find("state_interface/" + channel.interface_name) !=
-                    paramters_.end()) {
-              channel.interface_index_state_for_command = std::stoi(
-                  paramters_["state_interface/" + channel.interface_name]
-              );
+      if (channel.for_name.empty()) {
+        // Check if only one interface is defined, if so, use it, otherwise throw error
+        // Loop over all parameters starting with state_interface and command_interface, then check what is behind /  and before the next / and set this as the channel for name. If any other channel is found, throw an error
+        std::string channel_name = "";
+        for (const auto &param : paramters_) {
+          if (param.first.find("state_interface/") == 0) {
+            std::string name = param.first.substr(16);
+            size_t pos = name.find("/");
+            if (pos != std::string::npos) {
+              name = name.substr(0, pos);
+            }
+            if (channel_name.empty()) {
+              channel_name = name;
+            } else if (channel_name != name) {
+              std::cerr << "GenericEcSlave: multiple channels found for the same interface" << std::endl;
+              return;
+            }
+          } else if (param.first.find("command_interface/") == 0) {
+            std::string name = param.first.substr(18);
+            size_t pos = name.find("/");
+            if (pos != std::string::npos) {
+              name = name.substr(0, pos);
+            }
+            if (channel_name.empty()) {
+              channel_name = name;
+            } else if (channel_name != name) {
+              std::cerr << "GenericEcSlave: multiple channels found for the same interface" << std::endl;
+              return;
             }
           }
         }
+        channel.for_name = channel_name;
+      } 
+      if (channel.pdo_type == ethercat_interface::TPDO) {
+        if (paramters_.find("state_interface/" + channel.for_name + "/" + channel.interface_name) !=
+            paramters_.end()) {
+          channel.interface_index = std::stoi(
+              paramters_["state_interface/" + channel.for_name + "/" + channel.interface_name]
+          );
+        }
       }
+      if (channel.pdo_type == ethercat_interface::RPDO) {
+        if (paramters_.find("command_interface/" + channel.for_name + "/" + channel.interface_name) !=
+            paramters_.end()) {
+          channel.interface_index = std::stoi(
+              paramters_["command_interface/" + channel.for_name + "/" + channel.interface_name]
+          );
+          if (channel.read &&
+              paramters_.find("state_interface/" + channel.for_name + "/" + channel.interface_name) !=
+                  paramters_.end()) {
+            channel.interface_index_state_for_command = std::stoi(
+                paramters_["state_interface/" + channel.for_name + "/" + channel.interface_name]
+            );
+          }
+        }
+      }
+      
 
       channel.setup_interface_ptrs(
-          state_interface_ptr_, command_interface_ptr_
+          joint_state_interfaces_[channel.for_name], joint_command_interfaces_[channel.for_name]
       );
     }
   }

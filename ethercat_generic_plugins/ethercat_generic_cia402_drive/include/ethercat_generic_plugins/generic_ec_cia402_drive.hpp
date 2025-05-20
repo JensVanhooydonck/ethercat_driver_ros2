@@ -42,9 +42,8 @@ namespace ethercat_generic_plugins {
 
       virtual bool setupSlave(
           std::unordered_map<std::string, std::string> slave_paramters,
-          std::vector<double> *state_interface,
-          std::vector<double> *command_interface,
-          const std::string &for_name = ""
+          std::unordered_map<std::string, std::vector<double>*> joint_state_interface,
+          std::unordered_map<std::string, std::vector<double>*> joint_command_interface
       );
 
       int8_t mode_of_operation_display_ = 0;
@@ -68,7 +67,6 @@ namespace ethercat_generic_plugins {
       bool last_fault_reset_command_ = false;
       double previous_target_ = -1;
       double last_position_ = std::numeric_limits<double>::quiet_NaN();
-      uint16_t pdo_offset = 0x0000;
 
       /** returns device state based upon the status_word */
       DeviceState deviceState(uint16_t status_word);

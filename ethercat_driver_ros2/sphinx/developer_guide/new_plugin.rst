@@ -60,14 +60,12 @@ To be loaded by the :code:`ethercat_driver_ros2`, the new module plugin needs to
     // and link ros2_control command and stat interface
     virtual bool setupSlave(
       std::unordered_map<std::string, std::string> slave_paramters,
-      std::vector<double> * state_interface,
-      std::vector<double> * command_interface,
-      const std::string& for_name = "")
+    std::unordered_map<std::string, std::vector<double>*> joint_state_interfaces,
+    std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces)
     {
-      state_interface_ptr_ = state_interface;
-      command_interface_ptr_ = command_interface;
+      joint_state_interfaces_ = joint_state_interfaces;
+      joint_command_interfaces_ = joint_command_interfaces;
       paramters_ = slave_paramters;
-      for_name_ = for_name;
       // Your module setup logic goes here
 
       return true;
