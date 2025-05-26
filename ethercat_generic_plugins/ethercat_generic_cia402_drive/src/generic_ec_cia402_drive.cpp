@@ -31,17 +31,17 @@ namespace ethercat_generic_plugins {
 
   void EcCiA402Drive::processData(size_t index, uint8_t *domain_address) {
     // Special case: ControlWord
-    if (pdo_channels_info_[index].index == CiA402D_RPDO_CONTROLWORD + pdo_channels_info_[index].pdo_offset) {
+    if (pdo_channels_info_[domain_map_[index]].index == CiA402D_RPDO_CONTROLWORD + pdo_channels_info_[domain_map_[index]].pdo_offset) {
       if (is_operational_) {
         if (fault_reset_command_interface_index_ >= 0) {
-          if (joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(fault_reset_command_interface_index_
+          if (joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(fault_reset_command_interface_index_
               ) == 0) {
             last_fault_reset_command_ = false;
           }
           if (last_fault_reset_command_ == false &&
-              joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(fault_reset_command_interface_index_
+              joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(fault_reset_command_interface_index_
               ) != 0 &&
-              !std::isnan(joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(
+              !std::isnan(joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(
                   fault_reset_command_interface_index_
               ))) {
             std::cout << "Triggering fault reset :" << std::endl;
@@ -51,30 +51,30 @@ namespace ethercat_generic_plugins {
         }
 
         if (auto_state_transitions_) {
-          pdo_channels_info_[index].default_value = transition(
-              state_, pdo_channels_info_[index].ec_read(domain_address)
+          pdo_channels_info_[domain_map_[index]].default_value = transition(
+              state_, pdo_channels_info_[domain_map_[index]].ec_read(domain_address)
           );
           if (mode_of_operation_ == ModeOfOperation::MODE_PROFILED_POSITION) {
             // Send New Target triggers if target position changes
             if (state_ == STATE_OPERATION_ENABLED &&
                 position_command_interface_index_ >= 0) {
-              uint16_t control_word = pdo_channels_info_[index].default_value;
+              uint16_t control_word = pdo_channels_info_[domain_map_[index]].default_value;
               double target_position =
-                  joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(position_command_interface_index_);
+                  joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(position_command_interface_index_);
               if (!std::isnan(target_position) &&
                   target_position == previous_target_ &&
                   (control_word & 0b00010000) == 0b00000000) {
-                pdo_channels_info_[index].default_value = transition(
+                pdo_channels_info_[domain_map_[index]].default_value = transition(
                     STATE_NEW_TARGET,
-                    pdo_channels_info_[index].ec_read(domain_address)
+                    pdo_channels_info_[domain_map_[index]].ec_read(domain_address)
                 );
               } else if ((!std::isnan(target_position) ||
                           !std::isnan(previous_target_)) &&
                          previous_target_ != target_position) {
                 previous_target_ = target_position;
-                pdo_channels_info_[index].default_value = transition(
+                pdo_channels_info_[domain_map_[index]].default_value = transition(
                     STATE_NEW_TARGET_RESET,
-                    pdo_channels_info_[index].ec_read(domain_address)
+                    pdo_channels_info_[domain_map_[index]].ec_read(domain_address)
                 );
               }
             }
@@ -84,7 +84,7 @@ namespace ethercat_generic_plugins {
         if (mode_of_operation_display_ == ModeOfOperation::MODE_HOMING) {
           // Also check if start_homing is triggerd
           if (start_homing_command_interface_index_ >= 0) {
-            if (joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(start_homing_command_interface_index_
+            if (joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(start_homing_command_interface_index_
                 ) != 0) {
               std::cerr << "EcCiA402Drive: Homing triggerd " << std::endl;
               // Start homing is triggerd. We will only remove this when we
@@ -98,45 +98,45 @@ namespace ethercat_generic_plugins {
                   std::cerr
                       << "EcCiA402Drive: Transitioning to new homing target "
                       << std::endl;
-                  pdo_channels_info_[index].default_value = transition(
+                  pdo_channels_info_[domain_map_[index]].default_value = transition(
                       STATE_NEW_TARGET,
-                      pdo_channels_info_[index].ec_read(domain_address)
+                      pdo_channels_info_[domain_map_[index]].ec_read(domain_address)
                   );
-                  joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(
+                  joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(
                       start_homing_command_interface_index_
                   ) = 0;
                 } else {
                   std::cerr << "EcCiA402Drive: Homing already running "
                             << std::endl;
-                  pdo_channels_info_[index].default_value = transition(
+                  pdo_channels_info_[domain_map_[index]].default_value = transition(
                       STATE_NEW_TARGET_RESET,
-                      pdo_channels_info_[index].ec_read(domain_address)
+                      pdo_channels_info_[domain_map_[index]].ec_read(domain_address)
                   );
                 }
 
                 last_position_ = 0; // Set command interface to 0
                 std::cerr
                     << "EcCiA402Drive: Setting last_position_ tot 0 for DRIVE"
-                    << pdo_channels_info_[index].for_name << std::endl;
+                    << pdo_channels_info_[domain_map_[index]].for_name << std::endl;
                 for (auto &channel : pdo_channels_info_) {
                   if (channel.index == CiA402D_RPDO_POSITION + channel.pdo_offset) {
                     channel.last_value = 0;
                     channel.default_value = 0;
                     std::cerr << "EcCiA402Drive: Setting last value tot NAN "
                                  "for DRIVE "
-                              << pdo_channels_info_[index].for_name << std::endl;
+                              << pdo_channels_info_[domain_map_[index]].for_name << std::endl;
                   } else if (channel.index == CiA402D_TPDO_POSITION + channel.pdo_offset) {
                     std::cerr << "EcCiA402Drive: Current position "
                               << channel.last_value << std::endl;
-                    joint_command_interfaces_[pdo_channels_info_[index].for_name]->at(position_command_interface_index_
+                    joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name]->at(position_command_interface_index_
                     ) = 0;
                   }
                 }
               }
               // } else {
-              //   pdo_channels_info_[index].default_value = transition(
+              //   pdo_channels_info_[domain_map_[index]].default_value = transition(
               //       STATE_NEW_TARGET_RESET,
-              //       pdo_channels_info_[index].ec_read(domain_address)
+              //       pdo_channels_info_[domain_map_[index]].ec_read(domain_address)
               //   );
               // }
             }
@@ -167,14 +167,14 @@ namespace ethercat_generic_plugins {
     }
 
     // setup current position as default position
-    if (pdo_channels_info_[index].index == CiA402D_RPDO_POSITION + pdo_channels_info_[index].pdo_offset) {
+    if (pdo_channels_info_[domain_map_[index]].index == CiA402D_RPDO_POSITION + pdo_channels_info_[domain_map_[index]].pdo_offset) {
       if (mode_of_operation_display_ != ModeOfOperation::MODE_NO_MODE &&
           !std::isnan(last_position_)) {
-        pdo_channels_info_[index].default_value =
-            pdo_channels_info_[index].factor * last_position_ +
-            pdo_channels_info_[index].offset;
+        pdo_channels_info_[domain_map_[index]].default_value =
+            pdo_channels_info_[domain_map_[index]].factor * last_position_ +
+            pdo_channels_info_[domain_map_[index]].offset;
       }
-      pdo_channels_info_[index].override_command =
+      pdo_channels_info_[domain_map_[index]].override_command =
           (mode_of_operation_display_ !=
                ModeOfOperation::MODE_CYCLIC_SYNC_POSITION &&
            mode_of_operation_display_ != ModeOfOperation::MODE_PROFILED_POSITION
@@ -184,28 +184,28 @@ namespace ethercat_generic_plugins {
     }
 
     // setup mode of operation
-    if (pdo_channels_info_[index].index == CiA402D_RPDO_MODE_OF_OPERATION + pdo_channels_info_[index].pdo_offset) {
+    if (pdo_channels_info_[domain_map_[index]].index == CiA402D_RPDO_MODE_OF_OPERATION + pdo_channels_info_[domain_map_[index]].pdo_offset) {
       if (mode_of_operation_ >= 0 && mode_of_operation_ <= 10) {
-        pdo_channels_info_[index].default_value = mode_of_operation_;
+        pdo_channels_info_[domain_map_[index]].default_value = mode_of_operation_;
       }
     }
 
     
-    pdo_channels_info_[index].ec_update(domain_address);
+    pdo_channels_info_[domain_map_[index]].ec_update(domain_address);
 
     // get mode_of_operation_display_
-    if (pdo_channels_info_[index].index ==
-        CiA402D_TPDO_MODE_OF_OPERATION_DISPLAY + pdo_channels_info_[index].pdo_offset) {
-      mode_of_operation_display_ = pdo_channels_info_[index].last_value;
+    if (pdo_channels_info_[domain_map_[index]].index ==
+        CiA402D_TPDO_MODE_OF_OPERATION_DISPLAY + pdo_channels_info_[domain_map_[index]].pdo_offset) {
+      mode_of_operation_display_ = pdo_channels_info_[domain_map_[index]].last_value;
     }
 
-    if (pdo_channels_info_[index].index == CiA402D_TPDO_POSITION + pdo_channels_info_[index].pdo_offset) {
-      last_position_ = pdo_channels_info_[index].last_value;
+    if (pdo_channels_info_[domain_map_[index]].index == CiA402D_TPDO_POSITION + pdo_channels_info_[domain_map_[index]].pdo_offset) {
+      last_position_ = pdo_channels_info_[domain_map_[index]].last_value;
     }
 
     // Special case: StatusWord
-    if (pdo_channels_info_[index].index == CiA402D_TPDO_STATUSWORD + pdo_channels_info_[index].pdo_offset) {
-      status_word_ = pdo_channels_info_[index].last_value;
+    if (pdo_channels_info_[domain_map_[index]].index == CiA402D_TPDO_STATUSWORD + pdo_channels_info_[domain_map_[index]].pdo_offset) {
+      status_word_ = pdo_channels_info_[domain_map_[index]].last_value;
     }
 
     // CHECK FOR STATE CHANGE
@@ -213,7 +213,7 @@ namespace ethercat_generic_plugins {
       if (status_word_ != last_status_word_) {
         state_ = deviceState(status_word_);
         if (state_ != last_state_) {
-          std::cout << "STATE[" << alias << " - " << pdo_channels_info_[index].for_name <<"]: (" << pdo_channels_info_[index].pdo_offset << ") " << DEVICE_STATE_STR.at(state_)
+          std::cout << "STATE[" << alias << " - " << pdo_channels_info_[domain_map_[index]].for_name <<"]: (" << pdo_channels_info_[domain_map_[index]].pdo_offset << ") " << DEVICE_STATE_STR.at(state_)
                     << " with status word :" << status_word_ << std::endl;
         }
       }
@@ -248,7 +248,6 @@ namespace ethercat_generic_plugins {
                 << std::endl;
       return false;
     }
-
     setup_interface_mapping();
     setup_syncs();
 
@@ -373,7 +372,7 @@ namespace ethercat_generic_plugins {
       if (auto_fault_reset_ || fault_reset_ || fault_reset_timer_ > 0) {
         fault_reset_ = false;
       //   auto current_command =
-      //       joint_command_interfaces_[pdo_channels_info_[index].for_name].at(position_command_interface_index_);
+      //       joint_command_interfaces_[pdo_channels_info_[domain_map_[index]].for_name].at(position_command_interface_index_);
       //   // command_interface_ptr_->at(position_command_interface_index_) =
       //   //     std::numeric_limits<double>::quiet_NaN(); // Clear command
       //   //     interface

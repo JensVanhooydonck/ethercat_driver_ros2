@@ -281,7 +281,7 @@ namespace ethercat_generic_plugins {
               channel_name = name;
             } else if (channel_name != name) {
               std::cerr << "GenericEcSlave: multiple channels found for the same interface" << std::endl;
-              return;
+              // return; // Just select the first one. Normaly this only happens for mapped channels not linked to a specific joint
             }
           } else if (param.first.find("command_interface/") == 0) {
             std::string name = param.first.substr(18);
@@ -293,7 +293,7 @@ namespace ethercat_generic_plugins {
               channel_name = name;
             } else if (channel_name != name) {
               std::cerr << "GenericEcSlave: multiple channels found for the same interface" << std::endl;
-              return;
+              // return; // Just select the first one. Normaly this only happens for mapped channels not linked to a specific joint
             }
           }
         }
@@ -323,7 +323,22 @@ namespace ethercat_generic_plugins {
         }
       }
       
-
+      std::cout << "Channel: " << channel.for_name << " Setup interface pointers " << std::endl;
+      // check if channel.for_name is in joint_state_interfaces_ and joint_command_interfaces_
+      if (joint_state_interfaces_.find(channel.for_name) == joint_state_interfaces_.end()) {
+        std::cerr << "GenericEcSlave: channel " << channel.for_name << " not found in joint_state_interfaces_" << std::endl;
+        for (auto &joint : joint_state_interfaces_) {
+          std::cerr << "GenericEcSlave: joint_state_interfaces_ " << joint.first << std::endl;
+        }
+        continue;
+      }
+      if (joint_command_interfaces_.find(channel.for_name) == joint_command_interfaces_.end()) {
+        std::cerr << "GenericEcSlave: channel " << channel.for_name << " not found in joint_command_interfaces_" << std::endl;
+        for (auto &joint : joint_command_interfaces_) {
+          std::cerr << "GenericEcSlave: joint_command_interfaces_ " << joint.first << std::endl;
+        }
+        continue;
+      }
       channel.setup_interface_ptrs(
           joint_state_interfaces_[channel.for_name], joint_command_interfaces_[channel.for_name]
       );

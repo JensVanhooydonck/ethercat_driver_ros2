@@ -75,6 +75,9 @@ namespace ethercat_driver {
     }
 
     std::unordered_map<std::string, std::vector<std::string>> module_joints = {};
+    std::unordered_map<std::string, std::vector<std::string>> module_gpio = {};
+    std::unordered_map<std::string, std::vector<std::string>> module_sensors = {};
+    // std::unordered_map<std::string, std::vector<std::unordered_map<std::string, std::string>>> = joint_module_params = {};
 
     for (uint j = 0; j < info_.joints.size(); j++) {
       RCLCPP_INFO(
@@ -86,18 +89,19 @@ namespace ethercat_driver {
           getEcModuleParam(info_.original_xml, info_.joints[j].name, "joint");
 
       for (auto i = 0ul; i < module_params.size(); i++) {
-        for (auto k = 0ul; k < info_.joints[j].state_interfaces.size(); k++) {
-          module_params[i]
-                       ["state_interface/" + info_.joints[j].name + "/" +
-                        info_.joints[j].state_interfaces[k].name] =
-                           std::to_string(k);
-        }
-        for (auto k = 0ul; k < info_.joints[j].command_interfaces.size(); k++) {
-          module_params[i]
-                       ["command_interface/" + info_.joints[j].name + "/" +
-                        info_.joints[j].command_interfaces[k].name] =
-                           std::to_string(k);
-        }
+        // for (auto k = 0ul; k < info_.joints[j].state_interfaces.size(); k++) {
+        //   module_params[i]
+        //   joint_module_params[info_.joints[j].name]
+        //                ["state_interface/" + info_.joints[j].name + "/" +
+        //                 info_.joints[j].state_interfaces[k].name] =
+        //                    std::to_string(k);
+        // }
+        // for (auto k = 0ul; k < info_.joints[j].command_interfaces.size(); k++) {
+        //   joint_module_params[info_.joints[j].name]
+        //                ["command_interface/" + info_.joints[j].name + "/" +
+        //                 info_.joints[j].command_interfaces[k].name] =
+        //                    std::to_string(k);
+        // }
         if (module_joints.find(module_params[i]["name"]) == module_joints.end()) {
           module_joints[module_params[i]["name"]] = {};
         } 
@@ -106,6 +110,39 @@ namespace ethercat_driver {
         );
       }
     }
+    for (uint g = 0; g < info_.gpios.size(); g++) {
+      RCLCPP_INFO(
+          rclcpp::get_logger("EthercatDriver"), "gpio: %s",
+          info_.gpios[g].name.c_str()
+      );
+      // check all gpios for EC modules and load into ec_modules_
+      auto module_params =
+          getEcModuleParam(info_.original_xml, info_.gpios[g].name, "gpio");
+      for (auto i = 0ul; i < module_params.size(); i++) {
+        if (module_gpio.find(module_params[i]["name"]) == module_gpio.end()) {
+          module_gpio[module_params[i]["name"]] = {};
+        } 
+        module_gpio[module_params[i]["name"]].push_back(
+            info_.gpios[g].name
+        );
+      }
+    }
+
+    for (uint s = 0; s < info_.sensors.size(); s++) {
+      RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "sensors");
+      // check all sensors for EC modules and load into ec_modules_
+      auto module_params =
+          getEcModuleParam(info_.original_xml, info_.sensors[s].name, "sensor");
+      for (auto i = 0ul; i < module_params.size(); i++) {
+        if (module_sensors.find(module_params[i]["name"]) == module_sensors.end()) {
+          module_sensors[module_params[i]["name"]] = {};
+        } 
+        module_sensors[module_params[i]["name"]].push_back(
+            info_.sensors[s].name
+        );
+      }
+    }
+
     for (uint i = 0; i < ec_module_parameters_.size(); i++) {
       auto joint_names = module_joints[ec_module_parameters_[i]["name"]];
       std::unordered_map<std::string, std::vector<double>*> hw_joint_states = {};
@@ -116,10 +153,78 @@ namespace ethercat_driver {
             joint_names.end()) {
               hw_joint_states[joint_name] = &hw_joint_states_[j];
               hw_joint_commands[joint_name] = &hw_joint_commands_[j];
+              for (auto k = 0ul; k < info_.joints[j].state_interfaces.size(); k++) {
+                    ec_module_parameters_[i]
+                       ["state_interface/" + info_.joints[j].name + "/" +
+                        info_.joints[j].state_interfaces[k].name] =
+                           std::to_string(k);
+              }
+              for (auto k = 0ul; k < info_.joints[j].command_interfaces.size(); k++) {
+                ec_module_parameters_[i]
+                            ["command_interface/" + info_.joints[j].name + "/" +
+                              info_.joints[j].command_interfaces[k].name] =
+                                std::to_string(k);
+              }
+          }
+      }
+
+      auto gpio_names = module_gpio[ec_module_parameters_[i]["name"]];
+      for (auto j = 0ul; j < info_.gpios.size(); j++) {
+        auto gpio_name = info_.gpios[j].name;
+        if (std::find(gpio_names.begin(), gpio_names.end(), gpio_name) !=
+            gpio_names.end()) {
+              hw_joint_states[gpio_name] = &hw_gpio_states_[j];
+              hw_joint_commands[gpio_name] = &hw_gpio_commands_[j];
+              for (auto k = 0ul; k < info_.gpios[j].state_interfaces.size(); k++) {
+                    ec_module_parameters_[i]
+                       ["state_interface/" + info_.gpios[j].name + "/" +
+                        info_.gpios[j].state_interfaces[k].name] =
+                           std::to_string(k);
+              }
+              for (auto k = 0ul; k < info_.gpios[j].command_interfaces.size(); k++) {
+                ec_module_parameters_[i]
+                            ["command_interface/" + info_.gpios[j].name + "/" +
+                              info_.gpios[j].command_interfaces[k].name] =
+                                std::to_string(k);
+              }
+          }
+      }
+
+      auto sensors_names = module_sensors[ec_module_parameters_[i]["name"]];
+      for (auto j = 0ul; j < info_.sensors.size(); j++) {
+        auto sensors_name = info_.sensors[j].name;
+        if (std::find(sensors_names.begin(), sensors_names.end(), sensors_name) !=
+            sensors_names.end()) {
+              hw_joint_states[sensors_name] = &hw_sensor_states_[j];
+              hw_joint_commands[sensors_name] = &hw_sensor_commands_[j];
+              for (auto k = 0ul; k < info_.sensors[j].state_interfaces.size(); k++) {
+                    ec_module_parameters_[i]
+                       ["state_interface/" + info_.sensors[j].name + "/" +
+                        info_.sensors[j].state_interfaces[k].name] =
+                           std::to_string(k);
+              }
+              for (auto k = 0ul; k < info_.sensors[j].command_interfaces.size(); k++) {
+                ec_module_parameters_[i]
+                            ["command_interface/" + info_.sensors[j].name + "/" +
+                              info_.sensors[j].command_interfaces[k].name] =
+                                std::to_string(k);
+              }
           }
       }
 
       try {
+        RCLCPP_INFO(
+        rclcpp::get_logger("EthercatDriver"), "Creating module %s for %s",
+          ec_module_parameters_[i].at("plugin").c_str(), ec_module_parameters_[i]["name"].c_str()
+      );
+      if ( ec_module_parameters_[i]["name"] == "454_weight") {
+        for (auto &param : ec_module_parameters_[i]) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("EthercatDriver"),
+            "Param: %s : %s", param.first.c_str(), param.second.c_str()
+          );
+        }
+      }
         auto module =
             ec_loader_.createSharedInstance(ec_module_parameters_[i].at("plugin"));
         if (!module->setupSlave(
@@ -132,6 +237,11 @@ namespace ethercat_driver {
           );
           return CallbackReturn::ERROR;
         }
+        RCLCPP_INFO(
+            rclcpp::get_logger("EthercatDriver"), "Adding ECSlave %i %s",
+            i,
+            ec_module_parameters_[i]["name"].c_str()
+        );
         ec_modules_.push_back(module);
       } catch (pluginlib::PluginlibException &ex) {
         RCLCPP_FATAL(
@@ -142,107 +252,107 @@ namespace ethercat_driver {
       }
     }
     
-    for (uint g = 0; g < info_.gpios.size(); g++) {
-      RCLCPP_INFO(
-          rclcpp::get_logger("EthercatDriver"), "gpio: %s",
-          info_.gpios[g].name.c_str()
-      );
-      // check all gpios for EC modules and load into ec_modules_
-      auto module_params =
-          getEcModuleParam(info_.original_xml, info_.gpios[g].name, "gpio");
-      std::unordered_map<std::string, std::vector<double>*> hw_joint_states = {};
-      std::unordered_map<std::string, std::vector<double>*> hw_joint_commands = {};
-      hw_joint_states[info_.gpios[g].name] = &hw_gpio_states_[g];
-      hw_joint_commands[info_.gpios[g].name] = &hw_gpio_commands_[g];
-      // ec_module_parameters_.insert(
-      //     ec_module_parameters_.end(), module_params.begin(),
-      //     module_params.end()
-      // );
-      for (auto i = 0ul; i < module_params.size(); i++) {
-        for (auto k = 0ul; k < info_.gpios[g].state_interfaces.size(); k++) {
-          module_params[i]
-                       ["state_interface/" +
-                        info_.gpios[g].state_interfaces[k].name] =
-                           std::to_string(k);
-        }
-        for (auto k = 0ul; k < info_.gpios[g].command_interfaces.size(); k++) {
-          module_params[i]
-                       ["command_interface/" +
-                        info_.gpios[g].command_interfaces[k].name] =
-                           std::to_string(k);
-        }
-        try {
-          auto module =
-              ec_loader_.createSharedInstance(module_params[i].at("plugin"));
-          if (!module->setupSlave(
-                  module_params[i], hw_joint_states, hw_joint_commands
-              )) {
-            RCLCPP_FATAL(
-                rclcpp::get_logger("EthercatDriver"),
-                "Setup of GPIO module %li FAILED.", i + 1
-            );
-            return CallbackReturn::ERROR;
-          }
-          ec_modules_.push_back(module);
-        } catch (pluginlib::PluginlibException &ex) {
-          RCLCPP_FATAL(
-              rclcpp::get_logger("EthercatDriver"),
-              "The plugin of %s failed to load for some reason. Error: %s\n",
-              info_.gpios[g].name.c_str(), ex.what()
-          );
-        }
-      }
-    }
-    for (uint s = 0; s < info_.sensors.size(); s++) {
-      RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "sensors");
-      // check all sensors for EC modules and load into ec_modules_
-      auto module_params =
-          getEcModuleParam(info_.original_xml, info_.sensors[s].name, "sensor");
-      // ec_module_parameters_.insert(
-      //     ec_module_parameters_.end(), module_params.begin(),
-      //     module_params.end()
-      // );
-      std::unordered_map<std::string, std::vector<double>*> hw_joint_states = {};
-      std::unordered_map<std::string, std::vector<double>*> hw_joint_commands = {};
-      hw_joint_states[info_.sensors[s].name] = &hw_sensor_states_[s];
-      hw_joint_commands[info_.sensors[s].name] = &hw_sensor_commands_[s];
-      for (auto i = 0ul; i < module_params.size(); i++) {
-        for (auto k = 0ul; k < info_.sensors[s].state_interfaces.size(); k++) {
-          module_params[i]
-                       ["state_interface/" +
-                        info_.sensors[s].state_interfaces[k].name] =
-                           std::to_string(k);
-        }
-        for (auto k = 0ul; k < info_.sensors[s].command_interfaces.size();
-             k++) {
-          module_params[i]
-                       ["command_interface/" +
-                        info_.sensors[s].command_interfaces[k].name] =
-                           std::to_string(k);
-        }
-        try {
-          auto module =
-              ec_loader_.createSharedInstance(module_params[i].at("plugin"));
-          if (!module->setupSlave(
-                  module_params[i], hw_joint_states,
-                  hw_joint_commands
-              )) {
-            RCLCPP_FATAL(
-                rclcpp::get_logger("EthercatDriver"),
-                "Setup of Sensor module %li FAILED.", i + 1
-            );
-            return CallbackReturn::ERROR;
-          }
-          ec_modules_.push_back(module);
-        } catch (pluginlib::PluginlibException &ex) {
-          RCLCPP_FATAL(
-              rclcpp::get_logger("EthercatDriver"),
-              "The plugin of %s failed to load for some reason. Error: %s\n",
-              info_.sensors[s].name.c_str(), ex.what()
-          );
-        }
-      }
-    }
+    // for (uint g = 0; g < info_.gpios.size(); g++) {
+    //   RCLCPP_INFO(
+    //       rclcpp::get_logger("EthercatDriver"), "gpio: %s",
+    //       info_.gpios[g].name.c_str()
+    //   );
+    //   // check all gpios for EC modules and load into ec_modules_
+    //   auto module_params =
+    //       getEcModuleParam(info_.original_xml, info_.gpios[g].name, "gpio");
+    //   std::unordered_map<std::string, std::vector<double>*> hw_joint_states = {};
+    //   std::unordered_map<std::string, std::vector<double>*> hw_joint_commands = {};
+    //   hw_joint_states[info_.gpios[g].name] = &hw_gpio_states_[g];
+    //   hw_joint_commands[info_.gpios[g].name] = &hw_gpio_commands_[g];
+    //   // ec_module_parameters_.insert(
+    //   //     ec_module_parameters_.end(), module_params.begin(),
+    //   //     module_params.end()
+    //   // );
+    //   for (auto i = 0ul; i < module_params.size(); i++) {
+    //     for (auto k = 0ul; k < info_.gpios[g].state_interfaces.size(); k++) {
+    //       module_params[i]
+    //                    ["state_interface/" +
+    //                     info_.gpios[g].state_interfaces[k].name] =
+    //                        std::to_string(k);
+    //     }
+    //     for (auto k = 0ul; k < info_.gpios[g].command_interfaces.size(); k++) {
+    //       module_params[i]
+    //                    ["command_interface/" +
+    //                     info_.gpios[g].command_interfaces[k].name] =
+    //                        std::to_string(k);
+    //     }
+    //     try {
+    //       auto module =
+    //           ec_loader_.createSharedInstance(module_params[i].at("plugin"));
+    //       if (!module->setupSlave(
+    //               module_params[i], hw_joint_states, hw_joint_commands
+    //           )) {
+    //         RCLCPP_FATAL(
+    //             rclcpp::get_logger("EthercatDriver"),
+    //             "Setup of GPIO module %li FAILED.", i + 1
+    //         );
+    //         return CallbackReturn::ERROR;
+    //       }
+    //       ec_modules_.push_back(module);
+    //     } catch (pluginlib::PluginlibException &ex) {
+    //       RCLCPP_FATAL(
+    //           rclcpp::get_logger("EthercatDriver"),
+    //           "The plugin of %s failed to load for some reason. Error: %s\n",
+    //           info_.gpios[g].name.c_str(), ex.what()
+    //       );
+    //     }
+    //   }
+    // }
+    // for (uint s = 0; s < info_.sensors.size(); s++) {
+    //   RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "sensors");
+    //   // check all sensors for EC modules and load into ec_modules_
+    //   auto module_params =
+    //       getEcModuleParam(info_.original_xml, info_.sensors[s].name, "sensor");
+    //   // ec_module_parameters_.insert(
+    //   //     ec_module_parameters_.end(), module_params.begin(),
+    //   //     module_params.end()
+    //   // );
+    //   std::unordered_map<std::string, std::vector<double>*> hw_joint_states = {};
+    //   std::unordered_map<std::string, std::vector<double>*> hw_joint_commands = {};
+    //   hw_joint_states[info_.sensors[s].name] = &hw_sensor_states_[s];
+    //   hw_joint_commands[info_.sensors[s].name] = &hw_sensor_commands_[s];
+    //   for (auto i = 0ul; i < module_params.size(); i++) {
+    //     for (auto k = 0ul; k < info_.sensors[s].state_interfaces.size(); k++) {
+    //       module_params[i]
+    //                    ["state_interface/" +
+    //                     info_.sensors[s].state_interfaces[k].name] =
+    //                        std::to_string(k);
+    //     }
+    //     for (auto k = 0ul; k < info_.sensors[s].command_interfaces.size();
+    //          k++) {
+    //       module_params[i]
+    //                    ["command_interface/" +
+    //                     info_.sensors[s].command_interfaces[k].name] =
+    //                        std::to_string(k);
+    //     }
+    //     try {
+    //       auto module =
+    //           ec_loader_.createSharedInstance(module_params[i].at("plugin"));
+    //       if (!module->setupSlave(
+    //               module_params[i], hw_joint_states,
+    //               hw_joint_commands
+    //           )) {
+    //         RCLCPP_FATAL(
+    //             rclcpp::get_logger("EthercatDriver"),
+    //             "Setup of Sensor module %li FAILED.", i + 1
+    //         );
+    //         return CallbackReturn::ERROR;
+    //       }
+    //       ec_modules_.push_back(module);
+    //     } catch (pluginlib::PluginlibException &ex) {
+    //       RCLCPP_FATAL(
+    //           rclcpp::get_logger("EthercatDriver"),
+    //           "The plugin of %s failed to load for some reason. Error: %s\n",
+    //           info_.sensors[s].name.c_str(), ex.what()
+    //       );
+    //     }
+    //   }
+    // }
 
     RCLCPP_INFO(
         rclcpp::get_logger("EthercatDriver"), "Got %li modules",
@@ -354,11 +464,27 @@ namespace ethercat_driver {
     master_.setCtrlFrequency(control_frequency_);
 
     for (auto i = 0ul; i < ec_modules_.size(); i++) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("EthercatDriver"), "Module %li ", 
+        i
+    );
+        RCLCPP_INFO(
+        rclcpp::get_logger("EthercatDriver"), "Adding slave %s at position %s", 
+        ec_module_parameters_[i]["alias"].c_str(),
+        ec_module_parameters_[i]["position"].c_str()
+    );
       master_.addSlave(
           std::stod(ec_module_parameters_[i]["alias"]),
           std::stod(ec_module_parameters_[i]["position"]), ec_modules_[i].get()
       );
+
+      RCLCPP_INFO(
+        rclcpp::get_logger("EthercatDriver"), "Added slave %s at position %s", 
+        ec_module_parameters_[i]["alias"].c_str(),
+        ec_module_parameters_[i]["position"].c_str()
+    );
     }
+    RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "Configure SDO");
 
     // configure SDO
     for (auto i = 0ul; i < ec_modules_.size(); i++) {
@@ -378,7 +504,7 @@ namespace ethercat_driver {
         }
       }
     }
-
+    RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "Activating _----");
     if (!master_.activate()) {
       RCLCPP_ERROR(rclcpp::get_logger("EthercatDriver"), "Activate EcMaster failed");
       return CallbackReturn::ERROR;
@@ -395,7 +521,7 @@ namespace ethercat_driver {
       // wait until next shot
       clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t, NULL);
       // update EtherCAT bus
-
+      RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "Before updated!");
       master_.update();
       RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "updated!");
 
@@ -498,6 +624,7 @@ namespace ethercat_driver {
           ros2_control_it->FirstChildElement(component_type.c_str());
       while (ros2_control_child_it) {
         if (!component_name.compare(ros2_control_child_it->Attribute("name"))) {
+
           const auto *ec_module_it =
               ros2_control_child_it->FirstChildElement("ec_module");
           while (ec_module_it) {
@@ -534,6 +661,7 @@ namespace ethercat_driver {
                     "Combining parameter %s in module %s",
                     param_name.c_str(), name.c_str()
                 );
+                  } else {
                 skip = true;
                 }
               }
@@ -544,6 +672,10 @@ namespace ethercat_driver {
             } else {
               module_params.push_back(module_param);
               ec_module_parameters_.push_back(module_param);
+              RCLCPP_INFO(
+                rclcpp::get_logger("EthercatDriver"), "Adding to ec_module_parameters %s",
+                component_name.c_str()
+            );
             }
             ec_module_it = ec_module_it->NextSiblingElement("ec_module");
           }

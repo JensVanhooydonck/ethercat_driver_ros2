@@ -73,7 +73,6 @@ namespace ethercat_interface {
 
   void EcMaster::addSlave(uint16_t alias, uint16_t position, EcSlave *slave) {
     // configure slave in master
-
     SlaveInfo slave_info;
     slave_info.slave = slave;
     slave_info.alias = alias;
@@ -246,6 +245,9 @@ namespace ethercat_interface {
     // retrieve domain data
     for (auto &iter : domain_info_) {
       DomainInfo *domain_info = iter.second;
+      if (domain_info == NULL) {
+        throw std::runtime_error("Null domain info: " + std::to_string(iter.first));
+      }
       domain_info->domain_pd = ecrt_domain_data(domain_info->domain);
       if (domain_info->domain_pd == NULL) {
         printWarning("Activate. Failed to retrieve domain process data.");
