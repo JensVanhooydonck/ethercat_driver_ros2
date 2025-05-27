@@ -46,33 +46,34 @@ namespace ethercat_generic_plugins {
           std::unordered_map<std::string, std::vector<double>*> joint_command_interface
       );
 
-      int8_t mode_of_operation_display_ = 0;
-      int8_t mode_of_operation_ = -1;
+      std::unordered_map<std::string, int8_t> mode_of_operation_display_ = {}; // 0;
+      std::unordered_map<std::string, int8_t> mode_of_operation_ = {}; // -1;
 
     protected:
-      uint32_t counter_ = 0;
-      uint16_t last_status_word_ = -1;
-      uint16_t status_word_ = 0;
-      uint16_t control_word_ = 0;
-      DeviceState last_state_ = STATE_START;
-      DeviceState state_ = STATE_START;
-      bool initialized_ = false;
+      std::unordered_map<std::string, uint32_t> counter_ = {}; // 0;
+      std::unordered_map<std::string, uint16_t> last_status_word_ = {}; // = -1;
+      std::unordered_map<std::string, uint16_t> status_word_ =  {}; //0;
+      std::unordered_map<std::string, uint16_t> control_word_ = {}; //0;
+      std::unordered_map<std::string, DeviceState> last_state_ = {}; // STATE_START;
+      std::unordered_map<std::string, DeviceState> state_ = {}; // STATE_START;
+      std::unordered_map<std::string, bool> initialized_ = {}; // false;
       bool auto_fault_reset_ = false;
       bool auto_state_transitions_ = true;
-      bool fault_reset_ = false;
-      uint16_t fault_reset_timer_ = 0;
-      int fault_reset_command_interface_index_ = -1;
-      int start_homing_command_interface_index_ = -1;
-      int position_command_interface_index_ = -1;
-      bool last_fault_reset_command_ = false;
-      double previous_target_ = -1;
-      double last_position_ = std::numeric_limits<double>::quiet_NaN();
+      bool fault_reset_on_start_up = false;
+      std::unordered_map<std::string, bool> fault_reset_ = {};
+      std::unordered_map<std::string, uint16_t> fault_reset_timer_ = {}; //0;
+      std::unordered_map<std::string, int> fault_reset_command_interface_index_ = {}; // -1;
+      std::unordered_map<std::string, int> start_homing_command_interface_index_ = {}; // -1;
+      std::unordered_map<std::string, int> position_command_interface_index_ = {}; // -1;
+      std::unordered_map<std::string,bool> last_fault_reset_command_ = {}; //false;
+      std::unordered_map<std::string,double> previous_target_ = {}; //-1;
+      std::unordered_map<std::string,double> last_position_ = {}; //std::numeric_limits<double>::quiet_NaN();
 
       /** returns device state based upon the status_word */
       DeviceState deviceState(uint16_t status_word);
       /** returns the control word that will take device from state to next
        * desired state */
-      uint16_t transition(DeviceState state, uint16_t control_word);
+      uint16_t transition(DeviceState state, uint16_t control_word, std::string for_name);
       /** set up of the drive configuration from yaml node*/
       bool setup_from_config(YAML::Node drive_config);
       /** set up of the drive configuration from yaml file*/
