@@ -412,6 +412,10 @@ namespace ethercat_generic_plugins {
       if (fault_reset_[for_name]) {
         fault_reset_[for_name] = false;
         fault_reset_timer_[for_name] = 0;
+        if (fault_reset_command_interface_index_[for_name] >= 0) {
+          std::cerr << "EcCiA402Drive: Setting reset to 0 for DRIVE " << for_name << std::endl;
+          joint_command_interfaces_[for_name]->at(fault_reset_command_interface_index_[for_name]) = 0;
+        }
       }
       return control_word;
     case STATE_QUICK_STOP_ACTIVE: // -> STATE_OPERATION_ENABLED
