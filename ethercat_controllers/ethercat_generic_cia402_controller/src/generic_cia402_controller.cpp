@@ -242,6 +242,10 @@ namespace ethercat_controllers {
             static_cast<double>(reset_faults_[i])
         ); // reset_fault
         reset_faults_[i] = false;
+      } else if (command_interfaces_[4 * i + 2].get_value() != 0) {
+        command_interfaces_[4 * i + 2].set_value(
+            static_cast<double>(reset_faults_[i])
+        ); // reset_fault
       }
       if (reset_homing_[i]) {
         std::cout << "Setting start homing to 1 for dof: " << dof_names_[i]
