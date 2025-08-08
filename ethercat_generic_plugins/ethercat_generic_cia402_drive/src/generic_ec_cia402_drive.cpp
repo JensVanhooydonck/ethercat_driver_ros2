@@ -423,17 +423,17 @@ namespace ethercat_generic_plugins {
     case STATE_FAULT_REACTION_ACTIVE: // -> STATE_FAULT (automatic)
       return control_word;
     case STATE_FAULT: // -> STATE_SWITCH_ON_DISABLED
-      if (auto_fault_reset_ || fault_reset_[for_name] || fault_reset_timer_[for_name] > 0) {
+      if ((auto_fault_reset_ || fault_reset_[for_name]) && fault_reset_timer_[for_name] % 10 == 0) {
         fault_reset_[for_name] = false;
-        auto current_command =
-            joint_command_interfaces_[for_name]->at(position_command_interface_index_[for_name]);
+        // auto current_command =
+        //     joint_command_interfaces_[for_name]->at(position_command_interface_index_[for_name]);
         // command_interface_ptr_->at(position_command_interface_index_) =
         //     std::numeric_limits<double>::quiet_NaN(); // Clear command
         //     interface
 
         last_position_[for_name] =
             std::numeric_limits<double>::quiet_NaN(); // Clear command interface
-        std::cerr << "EcCiA402Drive: Setting last_position_ tot NAN for DRIVE " << std::endl;
+        std::cerr << "EcCiA402Drive: Setting last_position_ tot NAN for DRIVE " << for_name << std::endl;
         for (auto &channel : pdo_channels_info_) {
           if (channel.for_name != for_name) {
             continue; // Only reset channels for this drive
@@ -445,19 +445,24 @@ namespace ethercat_generic_plugins {
           } else if (channel.index == CiA402D_TPDO_POSITION + channel.pdo_offset) {
             std::cerr << "EcCiA402Drive: Current position "
                       << channel.last_value << std::endl;
-            joint_command_interfaces_[for_name]->at(position_command_interface_index_[for_name]) =
-                channel.last_value;
+            channel.last_value = std::numeric_limits<double>::quiet_NaN();
+            channel.default_value = std::numeric_limits<double>::quiet_NaN();
+            // joint_command_interfaces_[for_name]->at(position_command_interface_index_[for_name]) =
+            //     channel.last_value;
+            // last_position_[for_name] = channel.last_value; // Set command interface to last position
           }
 
-          std::cerr
-            << "EcCiA402Drive: Setting command_interface_ptr_ tot current "
-               "for DRIVE " << " Previous: " << current_command << std::endl;
-          std::cerr << "Now: "
-                    << joint_command_interfaces_[for_name]->at(
-                          position_command_interface_index_[for_name]
-                      )
-                    << std::endl;
+          // std::cerr
+          //   << "EcCiA402Drive: Setting command_interface_ptr_ tot current "
+          //      "for DRIVE " << " Previous: " << current_command << std::endl;
+          // std::cerr << "Now: "
+          //           << joint_command_interfaces_[for_name]->at(
+          //                 position_command_interface_index_[for_name]
+          //             )
+          //           << std::endl;
         }
+        // last_position_[for_name] =
+        //     std::numeric_limits<double>::quiet_NaN(); // Clear command interface
         std::cerr << "EcCiA402Drive: RESETTING DRIVE " << std::endl;
       
         fault_reset_timer_[for_name] += 1;
@@ -467,6 +472,9 @@ namespace ethercat_generic_plugins {
         }
         return (control_word & 0b11111111) | 0b10000000; // automatic reset
       } else {
+        if (fault_reset_[for_name] && fault_reset_timer_[for_name] > 0) {
+          fault_reset_timer_[for_name] += 1;
+        }
         return control_word;
       }
     default:
