@@ -95,6 +95,10 @@ namespace ethercat_interface {
           slave_info.config, slave->assign_activate_dc_sync(), interval_,
           interval_ - (t.tv_nsec % (interval_)), 0, 0
       );
+      // ecrt_slave_config_dc(
+      //     slave_info.config, slave->assign_activate_dc_sync(), interval_,
+      //     interval_ / 2.0, 0,0
+      // );
     }
 
     slave_info_.push_back(slave_info);
@@ -284,16 +288,18 @@ namespace ethercat_interface {
       }
     }
 
-    struct timespec t;
+    // if (update_counter_ % check_state_frequency_ == 0) {
+      struct timespec t;
 
-    clock_gettime(CLOCK_REALTIME, &t);
-    ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
-    ecrt_master_sync_reference_clock(master_);
-    ecrt_master_sync_slave_clocks(master_);
+      clock_gettime(CLOCK_REALTIME, &t);
+      ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+      ecrt_master_sync_reference_clock(master_);
+      ecrt_master_sync_slave_clocks(master_);
 
-    // send process data
-    ecrt_domain_queue(domain_info->domain);
-    ecrt_master_send(master_);
+      // send process data
+      ecrt_domain_queue(domain_info->domain);
+      ecrt_master_send(master_);
+    // }
 
     ++update_counter_;
   }

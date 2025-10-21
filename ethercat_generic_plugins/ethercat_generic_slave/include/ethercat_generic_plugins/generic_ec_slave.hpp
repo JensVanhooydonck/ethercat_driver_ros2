@@ -35,6 +35,7 @@ namespace ethercat_generic_plugins {
       virtual int assign_activate_dc_sync();
 
       virtual void processData(size_t index, uint8_t *domain_address);
+      // virtual bool initialized() override;
 
       virtual const ec_sync_info_t *syncs();
       virtual size_t syncSize();

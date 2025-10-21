@@ -43,6 +43,10 @@ namespace ethercat_generic_plugins {
     return assign_activate_;
   }
 
+  // bool GenericEcSlave::initialized() {
+  //   return true;
+  // }
+
   void GenericEcSlave::processData(size_t index, uint8_t *domain_address) {
     pdo_channels_info_[domain_map_[index]].ec_update(domain_address);
   }
@@ -323,7 +327,7 @@ namespace ethercat_generic_plugins {
         }
       }
       
-      std::cout << "Channel: " << channel.for_name << " Setup interface pointers " << std::endl;
+      // std::cout << "Channel: " << channel.for_name << " Setup interface pointers " << std::endl;
       // check if channel.for_name is in joint_state_interfaces_ and joint_command_interfaces_
       if (joint_state_interfaces_.find(channel.for_name) == joint_state_interfaces_.end()) {
         std::cerr << "GenericEcSlave: channel " << channel.for_name << " not found in joint_state_interfaces_" << std::endl;

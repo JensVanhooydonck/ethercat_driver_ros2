@@ -217,14 +217,6 @@ namespace ethercat_driver {
         rclcpp::get_logger("EthercatDriver"), "Creating module %s for %s",
           ec_module_parameters_[i].at("plugin").c_str(), ec_module_parameters_[i]["name"].c_str()
       );
-      if ( ec_module_parameters_[i]["name"] == "454_weight") {
-        for (auto &param : ec_module_parameters_[i]) {
-          RCLCPP_INFO(
-            rclcpp::get_logger("EthercatDriver"),
-            "Param: %s : %s", param.first.c_str(), param.second.c_str()
-          );
-        }
-      }
         auto module =
             ec_loader_.createSharedInstance(ec_module_parameters_[i].at("plugin"));
         if (!module->setupSlave(
@@ -517,18 +509,28 @@ namespace ethercat_driver {
     t.tv_sec++;
 
     bool running = true;
+    int not_initialized_i = 0;
     while (running) {
       // wait until next shot
       clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t, NULL);
       // update EtherCAT bus
-      RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "Before updated!");
+      // RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "Before updated!");
       master_.update();
-      RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "updated!");
+      // RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "updated!");
 
       // check if operational
       bool isAllInit = true;
+      int i = 0;
       for (auto &module : ec_modules_) {
         isAllInit = isAllInit && module->initialized();
+        if (!isAllInit) {
+          if (not_initialized_i != i) {
+            RCLCPP_INFO(rclcpp::get_logger("EthercatDriver"), "EC Module not initialized!, %s", ec_module_parameters_[i]["name"].c_str());
+            not_initialized_i = i;
+          }
+          break;
+        }
+        i++;
       }
       if (isAllInit) {
         running = false;

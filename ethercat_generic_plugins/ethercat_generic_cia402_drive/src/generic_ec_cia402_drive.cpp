@@ -25,16 +25,17 @@ namespace ethercat_generic_plugins {
   EcCiA402Drive::~EcCiA402Drive() {
   }
 
-  bool EcCiA402Drive::initialized() const {
-    // Check if every drive is initialized
-    return std::all_of(
-        initialized_.begin(), initialized_.end(),
-        [](const std::pair<std::string, bool> &pair) {
-          return pair.second;
-        }
-    );
-    // return initialized_;
-  }
+  // bool EcCiA402Drive::initialized() {
+  //   // Check if every drive is initialized
+  //   bool all_initialized = std::all_of(
+  //       initialized_.begin(), initialized_.end(),
+  //       [](const std::pair<std::string, bool> &pair) {
+  //         return pair.second;
+  //       }
+  //   );
+
+  //   return all_initialized;
+  // }
 
   void EcCiA402Drive::processData(size_t index, uint8_t *domain_address) {
     // Special case: ControlWord

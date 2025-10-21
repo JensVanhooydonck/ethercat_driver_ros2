@@ -39,8 +39,8 @@ public:
   virtual void processData(size_t /*index*/, uint8_t * /*domain_address*/) {}
   /** a pointer to syncs. return &syncs[0] */
   virtual const ec_sync_info_t * syncs() {return NULL;}
-  virtual bool initialized() {return true;}
-  virtual void set_state_is_operational(bool value) {is_operational_ = value;}
+  virtual bool initialized() {return _initialized;}
+  virtual void set_state_is_operational(bool value) {is_operational_ = value; if (value && !_initialized) { _initialized = value;}}
   /** Assign activate DC synchronization. return activate word*/
   virtual int assign_activate_dc_sync() {return 0x00;}
   /** number of elements in the syncs array. */
@@ -73,6 +73,7 @@ protected:
   std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces_;
   std::unordered_map<std::string, std::string> paramters_;
   bool is_operational_ = false;
+  bool _initialized = false;
 };
 }  // namespace ethercat_interface
 #endif  // ETHERCAT_INTERFACE__EC_SLAVE_HPP_
