@@ -107,7 +107,7 @@ namespace ethercat_interface {
           uint32_t raw = *(uint32_t *)&f;
           EC_WRITE_U32(domain_address, static_cast<uint32_t>(raw));
         } else if (data_type == "real64" || data_type == "double") {
-          uint32_t raw = *(uint32_t *)&value;
+          uint64_t raw = *(uint64_t *)&value;
           EC_WRITE_U64(domain_address, static_cast<uint64_t>(raw));
         } else {
           buffer_ = EC_READ_U8(domain_address);
