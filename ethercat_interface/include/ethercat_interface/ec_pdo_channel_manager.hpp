@@ -59,9 +59,11 @@ namespace ethercat_interface {
         } else if (data_type == "int32") {
           last_value = static_cast<double>(EC_READ_S32(domain_address));
         } else if (data_type == "uint64") {
-          last_value = static_cast<double>(EC_READ_U64(domain_address));
+          uint64_t raw = EC_READ_U64(domain_address);
+          last_value = *reinterpret_cast<double*>(&raw);
         } else if (data_type == "int64") {
-          last_value = static_cast<double>(EC_READ_S64(domain_address));
+          int64_t raw = EC_READ_S64(domain_address);
+          last_value = *reinterpret_cast<double*>(&raw);
         } else if (data_type == "real32" || data_type == "float") {
           uint32_t raw = EC_READ_U32(domain_address);
           float value = *(float *)&raw;
@@ -99,9 +101,11 @@ namespace ethercat_interface {
         } else if (data_type == "int32") {
           EC_WRITE_S32(domain_address, static_cast<int32_t>(value));
         } else if (data_type == "uint64") {
-          EC_WRITE_U64(domain_address, static_cast<uint64_t>(value));
+          uint64_t raw = *reinterpret_cast<const uint64_t*>(&value);
+          EC_WRITE_U64(domain_address, raw);
         } else if (data_type == "int64") {
-          EC_WRITE_S64(domain_address, static_cast<int64_t>(value));
+          int64_t raw = *reinterpret_cast<const int64_t*>(&value);
+          EC_WRITE_S64(domain_address, raw);
         } else if (data_type == "real32" || data_type == "float") {
           float f = (float)value;
           uint32_t raw = *(uint32_t *)&f;
