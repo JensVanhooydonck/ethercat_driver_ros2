@@ -21,10 +21,58 @@
 #include "rclcpp/rclcpp.hpp"
 #include "ethercat_msgs/srv/get_sdo.hpp"
 #include "ethercat_msgs/srv/set_sdo.hpp"
+#include "ethercat_msgs/srv/get_slave_position.hpp"
 #include "ethercat_manager/ec_master_async.hpp"
 #include "ethercat_manager/data_convertion_tools.hpp"
 
 namespace ethercat_manager {
+  void get_slave_position(
+      const std::shared_ptr<ethercat_msgs::srv::GetSlavePosition::Request> request,
+      std::shared_ptr<ethercat_msgs::srv::GetSlavePosition::Response> response
+  ) {
+    // For now, we assume that alias and position uniquely identify the slave
+    // we check all slave configs and check if same alias and position exists
+    // then we return the position of the slave_config
+    std::stringstream return_stream;
+    EcMasterAsync master(request->master_id);
+    try {
+      master.open(EcMasterAsync::ReadWrite);
+    } catch (MasterException &e) {
+      return_stream << e.what();
+      response->success = false;
+      RCLCPP_ERROR(
+          rclcpp::get_logger("ethercat_manager"), return_stream.str().c_str()
+      );
+      // response->sdo_return_message = return_stream.str();
+      // if (nullptr != data.target) {
+      //   delete[] data.target;
+      // }
+      return;
+    }
+    uint32_t index = -1;
+    try {
+      index = master.get_index(request->alias, request->position);
+      // cast uint32_t to uint16_t safely
+      if (index > std::numeric_limits<uint16_t>::max()) {
+        throw MasterException("Slave index exceeds uint16_t range!");
+      }
+      master.close();
+      response->slave_position = index;
+      response->success = true;
+    } catch (MasterException &e) {
+      return_stream << e.what();
+      response->success = false;
+      RCLCPP_ERROR(
+          rclcpp::get_logger("ethercat_manager"), return_stream.str().c_str()
+      );
+      // response->sdo_return_message = return_stream.str();
+      // if (nullptr != data.target) {
+      //   delete[] data.target;
+      // }
+      return;
+    }
+  }
+
   void upload(
       const std::shared_ptr<ethercat_msgs::srv::GetSdo::Request> request,
       std::shared_ptr<ethercat_msgs::srv::GetSdo::Response> response
@@ -54,7 +102,7 @@ namespace ethercat_manager {
 
     EcMasterAsync master(request->master_id);
     try {
-      master.open(EcMasterAsync::Read);
+      master.open(EcMasterAsync::ReadWrite);
     } catch (MasterException &e) {
       return_stream << e.what();
       response->success = false;
@@ -82,6 +130,9 @@ namespace ethercat_manager {
       }
       return;
     }
+    RCLCPP_ERROR(
+          rclcpp::get_logger("ethercat_manager"), "SDO upload success"
+      );
 
     master.close();
 
@@ -90,7 +141,7 @@ namespace ethercat_manager {
           data_stream, data_value, data_type, data.target, data.data_size
       );
     } catch (SizeException &e) {
-      delete[] data.target;
+      // delete[] data.target;
       return_stream << e.what();
       response->success = false;
       RCLCPP_ERROR(
@@ -98,10 +149,16 @@ namespace ethercat_manager {
       );
       response->sdo_return_message = return_stream.str();
       if (nullptr != data.target) {
+        RCLCPP_ERROR(
+            rclcpp::get_logger("ethercat_manager"), "second delete"
+        );
         delete[] data.target;
       }
       return;
     }
+    RCLCPP_ERROR(
+          rclcpp::get_logger("ethercat_manager"), "SDO upload done successfully"
+      );
     return_stream << "SDO upload done successfully";
     response->success = true;
     response->sdo_return_value_string = data_stream.str();
@@ -231,6 +288,12 @@ int main(int argc, char **argv) {
       node->create_service<ethercat_msgs::srv::SetSdo>(
           "ethercat_manager/set_sdo", &ethercat_manager::download
       );
+  
+  rclcpp::Service<ethercat_msgs::srv::GetSlavePosition>::SharedPtr service_get_slave_position =
+      node->create_service<ethercat_msgs::srv::GetSlavePosition>(
+          "ethercat_manager/get_slave_position", &ethercat_manager::get_slave_position
+      );
+
 
   rclcpp::spin(node);
   rclcpp::shutdown();

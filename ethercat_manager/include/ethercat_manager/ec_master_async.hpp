@@ -129,6 +129,52 @@ public:
     }
   }
 
+  void getConfig(ec_ioctl_config_t *data, unsigned int index)
+  {
+      data->config_index = index;
+
+      if (ioctl(fd_, EC_IOCTL_CONFIG, data) < 0) {
+          std::stringstream err;
+          err << "Failed to get slave configuration: " << strerror(errno);
+          throw MasterException(err.str());
+      }
+  }
+
+
+  uint32_t get_index(uint16_t alias, uint16_t position)
+  {
+    try {
+      for (unsigned int i = 0; i < 256; ++i) {
+        ec_ioctl_config_t config_data;
+        getConfig(&config_data, i);
+        if (config_data.alias == alias && config_data.position == position) {
+            RCLCPP_INFO(
+                rclcpp::get_logger("ethercat_manager"),
+                "Found slave %u:%u at index %u",
+                alias,  
+                position,
+                config_data.slave_position
+            );
+            return config_data.slave_position;
+        }
+        // RCLCPP_INFO(
+        //     rclcpp::get_logger("ethercat_manager"),
+        //     "Slave %u: Vendor ID: 0x%08X, Product Code: 0x%08X",
+        //     i,
+        //     config_data.vendor_id,
+        //     config_data.product_code
+        // );
+      }
+    } catch (MasterException & e) {
+      RCLCPP_ERROR(
+          rclcpp::get_logger("ethercat_manager"),
+          "Failed to get slave position for alias %u and position %u: %s", alias, position
+      );
+      return -1;
+    }
+      
+  }
+
 private:
   unsigned int index_;
   unsigned int mcount_;
