@@ -69,6 +69,7 @@ namespace ethercat_controllers {
     rt_moo_srv_ptr_.resize(dof_names_.size());
     rt_reset_fault_srv_ptr_.resize(dof_names_.size());
     rt_start_homing_srv_ptr_.resize(dof_names_.size());
+    rt_start_manual_homing_srv_ptr_.resize(dof_names_.size());
 
     reset_homing_.resize(dof_names_.size(), false);
 
@@ -97,6 +98,10 @@ namespace ethercat_controllers {
     start_homing_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
         "~/start_homing",
         std::bind(&CiA402Controller::start_homing, this, _1, _2)
+    );
+    start_manual_homing_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
+        "~/start_manual_homing",
+        std::bind(&CiA402Controller::start_manual_homing, this, _1, _2)
     );
     reset_fault_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
         "~/reset_fault",
@@ -172,6 +177,8 @@ namespace ethercat_controllers {
       auto moo_request = rt_moo_srv_ptr_[i].readFromRT();
       auto reset_fault_request = rt_reset_fault_srv_ptr_[i].readFromRT();
       auto start_homing_request = rt_start_homing_srv_ptr_[i].readFromRT();
+      auto start_manual_homing_request =
+          rt_start_manual_homing_srv_ptr_[i].readFromRT();
       if (!moo_request || !(*moo_request)) {
         mode_ops_[i] = state_interfaces_[2 * i].get_value();
       } else {
@@ -198,42 +205,42 @@ namespace ethercat_controllers {
         // }
       }
 
+      // Automatic homing: single shot. The drive runs its configured homing
+      // routine (homing method in 0x6098) on its own. Just raise start_homing
+      // and let the hardware drive control word 0x0F -> 0x1F (set bit 4).
       if (start_homing_request && (*start_homing_request)) {
-        // if (dof_names_[i] == (*reset_fault_request)->dof_name) {
-        std::cout << "Starting homing of dof: " << dof_names_[i] << std::endl;
+        std::cout << "Starting automatic homing of dof: " << dof_names_[i]
+                  << std::endl;
         reset_homing_[i] = true;
-        // rt_reset_fault_srv_ptr_.reset();
-        rt_start_homing_srv_ptr_[i].reset(); // writeFromNonRT(nullptr);
-        // }
-        //   auto moop = state_interfaces_[2 * i].get_value();
-        //   auto status_word = state_interfaces_[2 * i + 1].get_value();
-        //   if (moop == 6) {
-        //     // if (dof_names_[i] == (*start_homing_request)->dof_name) {
-        //     uint16_t control_word = command_interfaces_[4 * i].get_value();
-        //     std::cout << "Homing[" << moop << "] dof: " << dof_names_[i]
-        //               << " CW: " << control_word << " SW: " << status_word
-        //               << std::endl;
-        //     // auto control_word = 0b00011111;
-        //     control_word = control_word | 0b00010000;
-        //     bool done = command_interfaces_[4 * i].set_value(control_word
-        //     ); // control_word
-        //     std::cout << "Homing started at dof: " << dof_names_[i]
-        //               << " done: " << done << std::endl;
-        //     // rt_start_homing_srv_ptr_.reset();
-        //     rt_start_homing_srv_ptr_[i].reset(); //.writeFromNonRT(nullptr);
-        //     reset_homing_[i] = true;
-        //   } else {
-        //     std::cout << "Not in homing mode: [" << moop << "]" << std::endl;
-        //   }
-        //   // }
-        // } else if (reset_homing_[i]) {
-        //   uint16_t control_word = command_interfaces_[4 * i].get_value();
-        //   control_word = control_word & 0b11101111;
-        //   // auto control = 0b00001111;
-        //   bool done =
-        //       command_interfaces_[4 * i].set_value(control_word); //
-        //       control_word
-        //   reset_homing_[i] = false;
+        rt_start_homing_srv_ptr_[i].reset();
+      }
+
+      // Manual homing: two-step. The drive must be in MODE_HOMING (6) and the
+      // joint must first be jogged to the desired physical home position. We
+      // use the mode of operation *display* reported by the drive to know which
+      // step we are in.
+      if (start_manual_homing_request && (*start_manual_homing_request)) {
+        rt_start_manual_homing_srv_ptr_[i].reset();
+
+        auto current_mode = state_interfaces_[2 * i].get_value();
+        if (current_mode != 6 /* MODE_HOMING */) {
+          // Step 1: not yet in homing mode. Switch the drive to homing mode and
+          // wait. The operator now moves the joint to the desired home position
+          // and calls start_manual_homing again to commit it.
+          std::cout << "Enabling manual homing mode for dof: " << dof_names_[i]
+                    << std::endl;
+          mode_ops_[i] = 6;
+          command_interfaces_[4 * i + 1].set_value(
+              static_cast<double>(mode_ops_[i])
+          ); // mode_of_operation
+        } else {
+          // Step 2: already in homing mode at the desired position. Trigger the
+          // homing action, which sets the current location as home (the drive
+          // must be configured with a "current position" homing method).
+          std::cout << "Triggering manual homing (set current as home) of dof: "
+                    << dof_names_[i] << std::endl;
+          reset_homing_[i] = true;
+        }
       }
       if (reset_faults_[i]) {
         std::cout << "Setting reset fault to 1 for dof: " << dof_names_[i]
@@ -357,6 +364,25 @@ namespace ethercat_controllers {
       }
       response->return_message =
           "Requesting starting of homing at dof:" + request->dof_name;
+    } else {
+      response->return_message =
+          "Abort. DoF " + request->dof_name + " not configured.";
+    }
+  }
+
+  void CiA402Controller::start_manual_homing(
+      const std::shared_ptr<ResetFaultSrv::Request> request,
+      std::shared_ptr<ResetFaultSrv::Response> response
+  ) {
+    if (find(dof_names_.begin(), dof_names_.end(), request->dof_name) !=
+        dof_names_.end()) {
+      for (auto i = 0ul; i < dof_names_.size(); i++) {
+        if (dof_names_[i] == request->dof_name) {
+          rt_start_manual_homing_srv_ptr_[i].writeFromNonRT(request);
+        }
+      }
+      response->return_message =
+          "Requesting manual homing at dof:" + request->dof_name;
     } else {
       response->return_message =
           "Abort. DoF " + request->dof_name + " not configured.";

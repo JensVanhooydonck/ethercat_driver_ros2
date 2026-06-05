@@ -96,6 +96,11 @@ namespace ethercat_controllers {
           rt_start_homing_srv_ptr_;
       rclcpp::Service<ResetFaultSrv>::SharedPtr start_homing_srv_ptr_;
 
+      std::vector<realtime_tools::RealtimeBuffer<
+          std::shared_ptr<ResetFaultSrv::Request>>>
+          rt_start_manual_homing_srv_ptr_;
+      rclcpp::Service<ResetFaultSrv>::SharedPtr start_manual_homing_srv_ptr_;
+
       std::string logger_name_;
 
       std::string device_state_str(uint16_t status_word);
@@ -112,6 +117,11 @@ namespace ethercat_controllers {
       );
 
       void start_homing(
+          const std::shared_ptr<ResetFaultSrv::Request> request,
+          std::shared_ptr<ResetFaultSrv::Response> response
+      );
+
+      void start_manual_homing(
           const std::shared_ptr<ResetFaultSrv::Request> request,
           std::shared_ptr<ResetFaultSrv::Response> response
       );
