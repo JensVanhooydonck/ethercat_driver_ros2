@@ -223,6 +223,8 @@ namespace ethercat_controllers {
         rt_start_manual_homing_srv_ptr_[i].reset();
 
         auto current_mode = state_interfaces_[2 * i].get_value();
+        std::cout << "Current mode of operation for dof " << dof_names_[i] << ": "
+                  << mode_of_operation_str(current_mode) << std::endl;
         if (current_mode != 6 /* MODE_HOMING */) {
           // Step 1: not yet in homing mode. Switch the drive to homing mode and
           // wait. The operator now moves the joint to the desired home position
@@ -374,10 +376,13 @@ namespace ethercat_controllers {
       const std::shared_ptr<ResetFaultSrv::Request> request,
       std::shared_ptr<ResetFaultSrv::Response> response
   ) {
+    // print that we are going to start manual homing of the requested dof
     if (find(dof_names_.begin(), dof_names_.end(), request->dof_name) !=
         dof_names_.end()) {
       for (auto i = 0ul; i < dof_names_.size(); i++) {
         if (dof_names_[i] == request->dof_name) {
+          std::cout << "Received request to start manual homing of dof: "
+                    << request->dof_name << std::endl;
           rt_start_manual_homing_srv_ptr_[i].writeFromNonRT(request);
         }
       }
