@@ -39,10 +39,24 @@ namespace ethercat_generic_plugins {
 
   void EcCiA402Drive::processData(size_t index, uint8_t *domain_address) {
     // Special case: ControlWord
-    ethercat_interface::EcPdoChannelManager channel = 
+    ethercat_interface::EcPdoChannelManager channel =
         pdo_channels_info_[domain_map_[index]];
     std::string for_name = channel.for_name;
-    
+
+    // Axes of a multi-joint slave whose joint is hosted on another controller
+    // manager (partial-sim mode) have no usable interface vectors here: the
+    // driver registers empty dummies for them (older setups may leave the
+    // entry missing or null, which the maps below would default-insert as
+    // 0/nullptr and dereference). A real CiA402 joint always has command
+    // interfaces, so an absent, null, or empty vector marks a foreign axis:
+    // exchange the raw PDO with its defaults and leave the axis unpowered.
+    auto cmd_it = joint_command_interfaces_.find(for_name);
+    if (cmd_it == joint_command_interfaces_.end() ||
+        cmd_it->second == nullptr || cmd_it->second->empty()) {
+      pdo_channels_info_[domain_map_[index]].ec_update(domain_address);
+      return;
+    }
+
     if (channel.index == CiA402D_RPDO_CONTROLWORD + channel.pdo_offset) {
       if (is_operational_) {
         if (fault_reset_command_interface_index_[for_name] >= 0) {

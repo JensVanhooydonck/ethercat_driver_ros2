@@ -12,6 +12,8 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(ethercat_interface REQUIRED)
+find_package(yaml_cpp_vendor REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 add_library(
   ${PROJECT_NAME}
@@ -22,6 +24,11 @@ target_include_directories(
   ${PROJECT_NAME}
   PRIVATE
   include
+)
+
+target_link_libraries(
+  ${PROJECT_NAME}
+  yaml-cpp
 )
 
 ament_target_dependencies(

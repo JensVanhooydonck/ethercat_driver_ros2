@@ -18,6 +18,8 @@
 #include <string>
 #include <regex>
 
+#include "yaml-cpp/yaml.h"
+
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -210,6 +212,59 @@ namespace ethercat_driver {
                                 std::to_string(k);
               }
           }
+      }
+
+      // Shared multi-axis slaves (e.g. the MD800) list channels for joints of
+      // several logic blocks in one slave_config. In partial-sim mode some of
+      // those joints are hosted on another controller manager and are absent
+      // here; register empty dummy vectors for them so the module plugins
+      // never receive a null interface vector. The dummies expose no
+      // interfaces, so those axes get no commands and stay unpowered.
+      if (ec_module_parameters_[i].find("slave_config") !=
+          ec_module_parameters_[i].end()) {
+        try {
+          YAML::Node cfg =
+              YAML::LoadFile(ec_module_parameters_[i]["slave_config"]);
+          for (const auto *pdo_key : {"rpdo", "tpdo"}) {
+            if (!cfg[pdo_key]) {
+              continue;
+            }
+            for (const auto &pdo : cfg[pdo_key]) {
+              std::vector<YAML::Node> for_nodes;
+              if (pdo["for"]) {
+                for_nodes.push_back(pdo["for"]);
+              }
+              if (pdo["channels"]) {
+                for (const auto &channel : pdo["channels"]) {
+                  if (channel["for"]) {
+                    for_nodes.push_back(channel["for"]);
+                  }
+                }
+              }
+              for (const auto &node : for_nodes) {
+                auto for_name = node.as<std::string>();
+                if (hw_joint_states.find(for_name) == hw_joint_states.end()) {
+                  hw_joint_states[for_name] = &dummy_joint_states_[for_name];
+                  hw_joint_commands[for_name] =
+                      &dummy_joint_commands_[for_name];
+                  RCLCPP_INFO(
+                      rclcpp::get_logger("EthercatDriver"),
+                      "Module %s: '%s' is not hosted on this controller "
+                      "manager, registering idle dummy interfaces",
+                      ec_module_parameters_[i]["name"].c_str(),
+                      for_name.c_str()
+                  );
+                }
+              }
+            }
+          }
+        } catch (const std::exception &ex) {
+          RCLCPP_WARN(
+              rclcpp::get_logger("EthercatDriver"),
+              "Could not scan slave_config of module %s for foreign joints: %s",
+              ec_module_parameters_[i]["name"].c_str(), ex.what()
+          );
+        }
       }
 
       try {

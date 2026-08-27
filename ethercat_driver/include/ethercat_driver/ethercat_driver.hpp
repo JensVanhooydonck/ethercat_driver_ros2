@@ -79,6 +79,14 @@ private:
   std::vector<std::vector<double>> hw_sensor_states_;
   std::vector<std::vector<double>> hw_gpio_states_;
 
+  // Empty interface vectors for joints a slave_config references via `for:`
+  // but that are not hosted on this controller manager (shared multi-axis
+  // slaves in partial-sim mode). Registered so modules never receive a null
+  // vector; being empty, they expose no interfaces and the axes stay idle.
+  // unordered_map guarantees the pointers handed out stay stable.
+  std::unordered_map<std::string, std::vector<double>> dummy_joint_states_;
+  std::unordered_map<std::string, std::vector<double>> dummy_joint_commands_;
+
   pluginlib::ClassLoader<ethercat_interface::EcSlave> ec_loader_{
     "ethercat_interface", "ethercat_interface::EcSlave"};
 
