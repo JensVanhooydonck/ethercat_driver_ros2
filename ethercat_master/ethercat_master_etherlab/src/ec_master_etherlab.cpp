@@ -22,6 +22,7 @@
 #include <string.h>
 #include <iostream>
 #include <sstream>
+#include <cmath>
 
 #include "ethercat_master/ec_master_etherlab.hpp"
 #include "ethercat_interface/ec_master_base.hpp"
@@ -259,14 +260,16 @@ bool EtherlabMaster::add_slave(std::shared_ptr<ethercat_interface::EcSlaveBase> 
     // check and setup dc
 
   if (slave_info.slave->assign_activate_dc_sync()) {
-    struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
-      // ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+    // Same shift for every slave: IgH starts SYNC0 in phase with dc_ref_time + shift,
+    // so all slaves share one SYNC0 phase. write_process_data() keeps the send
+    // phase half a cycle away from it (lockSendPhase()).
+    has_dc_slaves_ = true;
+    sync0_shift_ns_ = interval_ / 2;
     ecrt_slave_config_dc(
           slave_info.config,
           slave_info.slave->assign_activate_dc_sync(),
           interval_,
-          interval_ / 2,
+          sync0_shift_ns_,
           0,
           0);
   }
@@ -531,6 +534,7 @@ bool EtherlabMaster::deactivate()
     printWarning("Deactivate. ecrt_master_deactivate() failed with code " + std::to_string(ret));
     return false;
   }
+  resetDcPhase();
 
   // ecrt_master_deactivate() frees everything created by ecrt_master_create_domain() /
   // ecrt_master_slave_config() / ecrt_domain_data(); drop everything that referenced those
@@ -552,6 +556,23 @@ bool EtherlabMaster::read_process_data()
 
   // receive process data
   ecrt_master_receive(master_);
+
+  // Margin of the frame sent by the previous write_process_data(): the reference
+  // clock's DC time when that frame passed it (lower 32 bit, widened around the
+  // application time sent with it) -> time until the next SYNC0.
+  uint32_t ref_time32;
+  if (has_dc_slaves_ && has_dc_ref_time_ &&
+    ecrt_master_reference_clock_time(master_, &ref_time32) == 0)
+  {
+    const int32_t diff = static_cast<int32_t>(
+      ref_time32 - static_cast<uint32_t>(last_app_time_));
+    const uint64_t phase = sync0Phase(last_app_time_ + diff);
+    const int64_t margin = phase ? interval_ - phase : 0;
+    if (margin_samples_ == 0 || margin < margin_min_ns_) {margin_min_ns_ = margin;}
+    if (margin_samples_ == 0 || margin > margin_max_ns_) {margin_max_ns_ = margin;}
+    margin_sum_ns_ += margin;
+    ++margin_samples_;
+  }
 
   DomainInfo * domain_info = domain_info_.at(domain);
   if (domain_info == NULL) {
@@ -627,10 +648,11 @@ bool EtherlabMaster::write_process_data()
     }
   }
 
-  struct timespec t;
-
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+  const uint64_t now = monotonicNs();
+  if (has_dc_slaves_) {
+    lockSendPhase(now);
+  }
+  setApplicationTime(now);
   ecrt_master_sync_reference_clock(master_);
   ecrt_master_sync_slave_clocks(master_);
 
@@ -638,8 +660,133 @@ bool EtherlabMaster::write_process_data()
   ecrt_domain_queue(domain_info->domain);
   ecrt_master_send(master_);
 
-
+  reportSync0Margin();
   return true;
+}
+
+uint64_t EtherlabMaster::monotonicNs()
+{
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return static_cast<uint64_t>(t.tv_sec) * 1000000000ULL + t.tv_nsec;
+}
+
+void EtherlabMaster::setApplicationTime(uint64_t now)
+{
+  const uint64_t app_time = now + app_time_offset_ns_;
+  ecrt_master_application_time(master_, app_time);
+  if (!has_dc_ref_time_) {
+    dc_ref_time_ = app_time;  // IgH takes the first application time as dc_ref_time
+    has_dc_ref_time_ = true;
+  }
+  last_app_time_ = app_time;
+}
+
+uint64_t EtherlabMaster::sync0Phase(uint64_t app_time) const
+{
+  if (interval_ == 0) {return 0;}
+  int64_t r = static_cast<int64_t>(app_time - dc_ref_time_ - sync0_shift_ns_) %
+    static_cast<int64_t>(interval_);
+  if (r < 0) {r += interval_;}
+  return static_cast<uint64_t>(r);
+}
+
+void EtherlabMaster::lockSendPhase(uint64_t now)
+{
+  // The slaves latch the outputs at SYNC0. If the frame arrives close to SYNC0,
+  // send-time jitter makes them alternately latch a stale and a fresh setpoint
+  // (CSP motion becomes choppy). SYNC0 is fixed relative to dc_ref_time, but the
+  // phase at which the caller sends is not: ros2_control_node runs its loop on
+  // its own CLOCK_MONOTONIC period grid (fixed phase, overruns skip whole periods)
+  // that starts at an arbitrary instant, and the settle loop before it has yet
+  // another phase. So: track the send phase and, when it has been coherent but
+  // more than a quarter cycle off the ideal (SYNC0 half a cycle after the send)
+  // for kPhaseSamples cycles, step the application time once to re-centre it.
+  // The DC clocks follow the application time and slew to the step in hardware;
+  // the step is at most interval/2, in the direction that moves SYNC0 away from
+  // the send. A drifting send phase (e.g. a sleep_for() loop) is not coherent and
+  // never triggers a step.
+  if (!has_dc_ref_time_ || interval_ == 0) {
+    return;
+  }
+  const int64_t half = interval_ / 2;
+  int64_t err = static_cast<int64_t>(sync0Phase(now + app_time_offset_ns_)) - half;
+  if (err <= -half) {err += interval_;}  // (-half, half], 0 = SYNC0 half a cycle after send
+  const double angle = 2.0 * M_PI * static_cast<double>(err) / interval_;
+  const double alpha = 1.0 / kPhaseSamples;
+  if (phase_samples_ == 0) {
+    phase_mean_cos_ = std::cos(angle);
+    phase_mean_sin_ = std::sin(angle);
+  } else {
+    phase_mean_cos_ += alpha * (std::cos(angle) - phase_mean_cos_);
+    phase_mean_sin_ += alpha * (std::sin(angle) - phase_mean_sin_);
+  }
+  if (phase_samples_ < kPhaseSamples) {
+    ++phase_samples_;
+    return;
+  }
+  const double coherence = std::hypot(phase_mean_cos_, phase_mean_sin_);
+  const int64_t mean_err = static_cast<int64_t>(std::llround(
+      std::atan2(phase_mean_sin_, phase_mean_cos_) / (2.0 * M_PI) * interval_));
+  if (coherence < 0.5 || std::llabs(mean_err) <= half / 2) {
+    phase_off_target_ = 0;
+    return;
+  }
+  if (++phase_off_target_ < kPhaseSamples) {
+    return;
+  }
+  app_time_offset_ns_ -= mean_err;
+  last_step_ns_ = -mean_err;
+  ++phase_steps_;
+  phase_samples_ = 0;
+  phase_off_target_ = 0;
+}
+
+void EtherlabMaster::reportSync0Margin()
+{
+  // Where the command frames land relative to SYNC0: ~interval/2 is ideal; close
+  // to 0 or to interval, the slaves alternately latch a stale and a fresh setpoint.
+  if (!has_dc_slaves_ || interval_ == 0 ||
+    ++margin_report_cycles_ < 10000000000ULL / interval_)
+  {
+    return;
+  }
+  margin_report_cycles_ = 0;
+  if (margin_samples_ == 0) {
+    return;
+  }
+  const int64_t mean = margin_sum_ns_ / margin_samples_;
+  const int64_t guard = 500000;  // 0.5 ms
+  const bool bad = margin_min_ns_ < guard || margin_max_ns_ > interval_ - guard;
+  const bool startup = margin_reports_++ < 6;
+  if (bad || startup) {
+    RCLCPP_WARN(
+      rclcpp::get_logger("EthercatDriver"),
+      "SYNC0 margin mean %.3f ms [%.3f .. %.3f] of %.3f ms cycle (%u samples, "
+      "%u phase step(s), last %.3f ms)%s",
+      mean / 1e6, margin_min_ns_ / 1e6, margin_max_ns_ / 1e6, interval_ / 1e6,
+      margin_samples_, phase_steps_, last_step_ns_ / 1e6,
+      bad ? " -- frames arrive close to SYNC0, drives may move choppy" : "");
+  } else {
+    RCLCPP_INFO(
+      rclcpp::get_logger("EthercatDriver"),
+      "SYNC0 margin mean %.3f ms [%.3f .. %.3f] of %.3f ms cycle (%u samples)",
+      mean / 1e6, margin_min_ns_ / 1e6, margin_max_ns_ / 1e6, interval_ / 1e6,
+      margin_samples_);
+  }
+  margin_samples_ = 0;
+  margin_sum_ns_ = 0;
+}
+
+void EtherlabMaster::resetDcPhase()
+{
+  has_dc_ref_time_ = false;
+  has_dc_slaves_ = false;
+  app_time_offset_ns_ = 0;
+  phase_samples_ = 0;
+  phase_off_target_ = 0;
+  margin_samples_ = 0;
+  margin_sum_ns_ = 0;
 }
 
 bool EtherlabMaster::reset()
