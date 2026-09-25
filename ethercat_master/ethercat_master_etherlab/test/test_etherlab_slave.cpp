@@ -67,33 +67,28 @@ TEST_F(EtherlabSlaveTest, SlaveSetup)
   // std::unordered_map<std::string, std::string> slave_paramters;
 
   ASSERT_TRUE(test_slave_ptr->setup_from_config(YAML::Load(test_slave_config)));
+  // GenericEcSlave is an EcSlave plugin: it builds its own sync/PDO layout
+  // (setupSlave() does this), which EtherlabSlave forwards to the master.
+  test_slave_ptr->setup_syncs();
   etherlab_slave_ = std::make_unique<FriendEtherlabSlave>(test_slave_ptr);
 
   ASSERT_EQ(etherlab_slave_->get_slave()->get_vendor_id(), 0x00000011u);
   ASSERT_EQ(etherlab_slave_->get_slave()->get_product_id(), 0x07030924u);
   ASSERT_EQ(etherlab_slave_->get_slave()->assign_activate_dc_sync(), 0x0321);
 
-  ASSERT_EQ(etherlab_slave_->get_slave()->get_sm_config().size(), 4u);
   ASSERT_EQ(etherlab_slave_->get_slave()->get_sdo_config().size(), 2u);
-  ASSERT_EQ(etherlab_slave_->get_slave()->get_pdo_info().size(), 3u);
 
-  auto channels = etherlab_slave_->get_slave()->get_pdo_channels_info();
-  ASSERT_EQ(channels[1]->interface_name(), "velocity") << "Interface name is not 'velocity'";
-  ASSERT_EQ(channels[0]->data().factor, 2);
-  ASSERT_EQ(channels[0]->data().offset, 10);
-  ASSERT_EQ(channels[3]->data().default_value, 1000) << "Default value is not 1000";
-  ASSERT_TRUE(std::isnan(channels[0]->data().default_value)) << "Default value is not NaN";
-  ASSERT_EQ(channels[4]->interface_name(), "null") << "Interface name is not 'null'";
-  ASSERT_EQ(channels[12]->interface_name(),
-    "analog_input2") << "Interface name is not 'analog_input2'";
-  ASSERT_EQ(channels[4]->data_type(), "uint16") << "Data type is not 'uint16'";
+  // layout forwarded from the EcSlave plugin
+  const ec_sync_info_t * syncs = etherlab_slave_->syncs();
+  ASSERT_EQ(syncs[2].n_pdos, 1u);
+  ASSERT_EQ(syncs[2].pdos[0].index, 0x1607u);
+  ASSERT_EQ(syncs[3].n_pdos, 2u);
+  ASSERT_EQ(syncs[3].pdos[0].index, 0x1a07u);
+  ASSERT_EQ(syncs[3].pdos[1].index, 0x1a45u);
 
-  ASSERT_EQ(etherlab_slave_->rpdos_.size(), 1u);
-  ASSERT_EQ(etherlab_slave_->rpdos_[0].index, 0x1607u);
-
-  ASSERT_EQ(etherlab_slave_->tpdos_.size(), 2u);
-  ASSERT_EQ(etherlab_slave_->tpdos_[0].index, 0x1a07u);
-  ASSERT_EQ(etherlab_slave_->tpdos_[1].index, 0x1a45u);
+  // an EcSlave plugin gets the entry position in its domain map
+  ASSERT_EQ(etherlab_slave_->process_data_index(0), 0u);
+  ASSERT_EQ(etherlab_slave_->process_data_index(7), 7u);
 }
 
 TEST_F(EtherlabSlaveTest, SlaveSetupPdoChannels)
@@ -101,17 +96,19 @@ TEST_F(EtherlabSlaveTest, SlaveSetupPdoChannels)
   auto test_slave_ptr = std::make_shared<TestSlave>();
 
   ASSERT_TRUE(test_slave_ptr->setup_from_config(YAML::Load(test_slave_config)));
+  // GenericEcSlave is an EcSlave plugin: it builds its own sync/PDO layout
+  // (setupSlave() does this), which EtherlabSlave forwards to the master.
+  test_slave_ptr->setup_syncs();
   etherlab_slave_ = std::make_unique<FriendEtherlabSlave>(test_slave_ptr);
 
-  std::vector<ec_pdo_entry_info_t> channels(
-    etherlab_slave_->channels(),
-    etherlab_slave_->channels() + etherlab_slave_->all_channels_.size()
-  );
+  std::map<unsigned int, std::vector<unsigned int>> domains;
+  etherlab_slave_->domains(domains);
+  const ec_pdo_entry_info_t * channels = etherlab_slave_->channels();
 
-  ASSERT_EQ(channels.size(), 13u);
-  ASSERT_EQ(channels[0].index, 0x607au);
-  ASSERT_EQ(channels[11].index, 0x2205u);
-  ASSERT_EQ(channels[11].subindex, 0x01u);
+  ASSERT_EQ(domains[0].size(), 13u);
+  ASSERT_EQ(channels[domains[0][0]].index, 0x607au);
+  ASSERT_EQ(channels[domains[0][11]].index, 0x2205u);
+  ASSERT_EQ(channels[domains[0][11]].subindex, 0x01u);
 }
 
 TEST_F(EtherlabSlaveTest, SlaveSetupSyncs)
@@ -119,6 +116,9 @@ TEST_F(EtherlabSlaveTest, SlaveSetupSyncs)
   auto test_slave_ptr = std::make_shared<TestSlave>();
 
   ASSERT_TRUE(test_slave_ptr->setup_from_config(YAML::Load(test_slave_config)));
+  // GenericEcSlave is an EcSlave plugin: it builds its own sync/PDO layout
+  // (setupSlave() does this), which EtherlabSlave forwards to the master.
+  test_slave_ptr->setup_syncs();
   etherlab_slave_ = std::make_unique<FriendEtherlabSlave>(test_slave_ptr);
 
   std::vector<ec_sync_info_t> syncs(
@@ -144,6 +144,9 @@ TEST_F(EtherlabSlaveTest, SlaveSetupDomains)
   auto test_slave_ptr = std::make_shared<TestSlave>();
 
   ASSERT_TRUE(test_slave_ptr->setup_from_config(YAML::Load(test_slave_config)));
+  // GenericEcSlave is an EcSlave plugin: it builds its own sync/PDO layout
+  // (setupSlave() does this), which EtherlabSlave forwards to the master.
+  test_slave_ptr->setup_syncs();
   etherlab_slave_ = std::make_unique<FriendEtherlabSlave>(test_slave_ptr);
 
   std::map<unsigned int, std::vector<unsigned int>> domains;

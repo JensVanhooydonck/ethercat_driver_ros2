@@ -20,6 +20,27 @@
 #include "rclcpp/executors/single_threaded_executor.hpp"
 #include "ros2_control_test_assets/descriptions.hpp"
 
+// One joint on mock_components/GenericSystem: ros2_control_test_assets::minimal_robot_urdf
+// uses the test_components hardware plugins, which throw std::bad_alloc on this
+// Jazzy install before the controller under test is ever loaded.
+static const char kMockUrdf[] = R"(<?xml version="1.0"?>
+<robot name="test_robot">
+  <link name="base_link"/>
+  <link name="link1"/>
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/><child link="link1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="1"/>
+  </joint>
+  <ros2_control name="TestSystem" type="system">
+    <hardware><plugin>mock_components/GenericSystem</plugin></hardware>
+    <joint name="joint1">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+    </joint>
+  </ros2_control>
+</robot>
+)";
+
 TEST(TestLoadCiA402Controller, load_controller)
 {
   rclcpp::init(0, nullptr);
@@ -29,7 +50,8 @@ TEST(TestLoadCiA402Controller, load_controller)
 
   controller_manager::ControllerManager cm(
     std::make_unique<hardware_interface::ResourceManager>(
-      ros2_control_test_assets::minimal_robot_urdf),
+      kMockUrdf, std::make_shared<rclcpp::Clock>(),
+      rclcpp::get_logger("test_controller_manager")),
     executor, "test_controller_manager");
 
   ASSERT_NO_THROW(

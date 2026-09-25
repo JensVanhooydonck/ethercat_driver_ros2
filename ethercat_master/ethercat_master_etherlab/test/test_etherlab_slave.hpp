@@ -66,6 +66,8 @@ class TestSlave : public ethercat_generic_plugins::GenericEcSlave
   FRIEND_TEST(EtherlabSlaveTest, SlaveSetupDomains);
 
 public:
+  using ethercat_generic_plugins::GenericEcSlave::setup_from_config;
+  using ethercat_generic_plugins::GenericEcSlave::setup_syncs;
   TestSlave()
   {
         /*vendor_id_ = 0x00000011;
