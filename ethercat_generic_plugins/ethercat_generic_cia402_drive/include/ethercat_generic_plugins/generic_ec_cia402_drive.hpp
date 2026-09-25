@@ -17,115 +17,68 @@
 #ifndef ETHERCAT_GENERIC_PLUGINS__GENERIC_EC_CIA402_DRIVE_HPP_
 #define ETHERCAT_GENERIC_PLUGINS__GENERIC_EC_CIA402_DRIVE_HPP_
 
-#include <chrono>
 #include <vector>
 #include <string>
 #include <unordered_map>
 #include <limits>
 
-#include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "yaml-cpp/yaml.h"
-#include "ethercat_interface/ec_slave_base.hpp"
-#include "ethercat_interface/ec_pdo_single_interface_channel_manager.hpp"
+#include "ethercat_interface/ec_slave.hpp"
+#include "ethercat_interface/ec_joint_pdo_channel_manager.hpp"
 #include "ethercat_generic_plugins/generic_ec_slave.hpp"
 #include "ethercat_generic_plugins/cia402_common_defs.hpp"
 
-namespace ethercat_generic_plugins
-{
+namespace ethercat_generic_plugins {
 
-class EcCiA402Drive : public GenericEcSlave
-{
-public:
-  EcCiA402Drive();
-  virtual ~EcCiA402Drive();
-  /** Returns true if drive has reached "operation enabled" state.
-   *  The transition through the state machine is handled automatically. */
-  bool initialized();
+  class EcCiA402Drive : public GenericEcSlave {
+    public:
+      EcCiA402Drive();
+      virtual ~EcCiA402Drive();
+      /** Returns true if drive has reached "operation enabled" state.
+       *  The transition through the state machine is handled automatically. */
+      // virtual bool initialized() override;
 
-  virtual void process_data(int index, uint8_t * domain_address);
+      virtual void processData(size_t index, uint8_t *domain_address);
 
-  virtual bool setup_slave(
-    std::unordered_map<std::string, std::string> slave_parameters,
-    std::vector<double> * state_interface,
-    std::vector<double> * command_interface);
+      virtual bool setupSlave(
+          std::unordered_map<std::string, std::string> slave_paramters,
+          std::unordered_map<std::string, std::vector<double>*> joint_state_interface,
+          std::unordered_map<std::string, std::vector<double>*> joint_command_interface
+      );
 
-  int8_t mode_of_operation_display_ = 0;
-  int8_t mode_of_operation_ = -1;
+      std::unordered_map<std::string, int8_t> mode_of_operation_display_ = {}; // 0;
+      std::unordered_map<std::string, int8_t> mode_of_operation_ = {}; // -1;
 
-  void updateState();
+    protected:
+      std::unordered_map<std::string, uint32_t> counter_ = {}; // 0;
+      std::unordered_map<std::string, uint16_t> last_status_word_ = {}; // = -1;
+      std::unordered_map<std::string, uint16_t> status_word_ =  {}; //0;
+      std::unordered_map<std::string, uint16_t> control_word_ = {}; //0;
+      std::unordered_map<std::string, DeviceState> last_state_ = {}; // STATE_START;
+      std::unordered_map<std::string, DeviceState> state_ = {}; // STATE_START;
+      std::unordered_map<std::string, bool> initialized_ = {}; // false;
+      bool auto_fault_reset_ = false;
+      bool auto_state_transitions_ = true;
+      bool fault_reset_on_start_up = false;
+      std::unordered_map<std::string, bool> fault_reset_ = {};
+      std::unordered_map<std::string, uint16_t> fault_reset_timer_ = {}; //0;
+      std::unordered_map<std::string, int> fault_reset_command_interface_index_ = {}; // -1;
+      std::unordered_map<std::string, int> start_homing_command_interface_index_ = {}; // -1;
+      std::unordered_map<std::string, int> position_command_interface_index_ = {}; // -1;
+      std::unordered_map<std::string,bool> last_fault_reset_command_ = {}; //false;
+      std::unordered_map<std::string,double> previous_target_ = {}; //-1;
+      std::unordered_map<std::string,double> last_position_ = {}; //std::numeric_limits<double>::quiet_NaN();
 
-  /** Appends CiA402 device state / mode of operation / (while faulted) error code to
-   *  GenericEcSlave's generic online/al_state diagnostics. See EcSlaveBase::collectDiagnostics()
-   *  — call the base first, this only adds to it. */
-  virtual void collectDiagnostics(diagnostic_msgs::msg::DiagnosticStatus & status) const;
+      /** returns device state based upon the status_word */
+      DeviceState deviceState(uint16_t status_word);
+      /** returns the control word that will take device from state to next
+       * desired state */
+      uint16_t transition(DeviceState state, uint16_t control_word, std::string for_name);
+      /** set up of the drive configuration from yaml node*/
+      bool setup_from_config(YAML::Node drive_config);
+      /** set up of the drive configuration from yaml file*/
+      bool setup_from_config_file(std::string config_file);
+  };
+} // namespace ethercat_generic_plugins
 
-protected:
-  /** \brief Whether this cycle's commanded target position (0x607a) passes through
-    * to the drive (true) or is overridden with the actual position (false). The
-    * stock plugin passes it through only in Cyclic Synchronous Position mode;
-    * vendor subclasses may extend this to other modes that use 0x607a as a
-    * position/equilibrium setpoint (e.g. an impedance-style vendor mode, 0x6060 = -6). */
-  virtual bool targetPositionPassthrough() const;
-
-  uint32_t counter_ = 0;
-  uint16_t last_status_word_ = -1;
-  uint16_t status_word_ = 0;
-  uint16_t control_word_ = 0;
-  // CoE 0x603F, only meaningful once faulted. Stays 0 if the slave_config doesn't map it.
-  uint16_t error_code_ = 0;
-  DeviceState last_state_ = STATE_START;
-  DeviceState state_ = STATE_START;
-  bool initialized_ = false;
-  bool auto_fault_reset_ = false;
-  bool auto_state_transitions_ = true;
-  // Whether the auto-walk (auto_state_transitions_) goes all the way to Operation Enabled on
-  // its own, or stops at Switched On (powered, not yet producing torque/motion) until an
-  // explicit enable_drive request takes the last step. False by default — a caller not using
-  // enable_drive at all gets the old always-auto-enable behaviour back by setting this true.
-  // See transition()'s STATE_SWITCH_ON case.
-  bool auto_enable_ = false;
-  bool fault_reset_ = false;
-  int fault_reset_command_interface_index_ = -1;
-  bool last_fault_reset_command_ = false;
-  double last_position_ = std::numeric_limits<double>::quiet_NaN();
-
-  // enable_drive: one level-triggered command interface (no PDO object of its own) that walks
-  // the drive toward Operation Enabled on a rising edge (0/NaN -> nonzero) and toward
-  // Switch-on-Disabled on a falling edge (nonzero -> 0/NaN), over as many cycles as it takes,
-  // independently of auto_state_transitions_. Meant for a caller that wants explicit control
-  // without hand-rolling the CiA402 walk itself.
-  int enable_drive_command_interface_index_ = -1;
-  bool last_enable_drive_command_ = false;
-  bool walking_to_enabled_ = false;
-  bool walking_to_disabled_ = false;
-
-  // How long a walk may run before giving up. Not a runtime error — updateState() just stops
-  // driving the controlword and latches walk_timed_out_ for collectDiagnostics() to report as
-  // a warning.
-  static constexpr std::chrono::seconds kWalkTimeout{5};
-  std::chrono::steady_clock::time_point walking_to_enabled_deadline_;
-  std::chrono::steady_clock::time_point walking_to_disabled_deadline_;
-  // Set when a walk misses its deadline; cleared by the next enable_drive edge (whether that
-  // one succeeds or times out again). walk_timeout_target_ names what it was walking toward,
-  // for the diagnostics message.
-  bool walk_timed_out_ = false;
-  DeviceState walk_timeout_target_ = STATE_UNDEFINED;
-
-  // True for one cycle after a fault_reset_ pulse is sent while nothing else
-  // (auto_state_transitions_) keeps calling transition() on later cycles — that path has no
-  // other opportunity to clear the pulse back down, so process_data() clears it directly. See
-  // its ControlWord handling.
-  bool fault_reset_pulse_active_ = false;
-
-  /** returns device state based upon the status_word */
-  DeviceState deviceState(uint16_t status_word);
-  /** returns the control word that will take device from state to next desired state */
-  uint16_t transition(DeviceState state, uint16_t control_word);
-  /** set up of the drive configuration from yaml node*/
-  bool setup_from_config(YAML::Node drive_config);
-  /** set up of the drive configuration from yaml file*/
-  bool setup_from_config_file(std::string config_file);
-};
-}  // namespace ethercat_generic_plugins
-
-#endif  // ETHERCAT_GENERIC_PLUGINS__GENERIC_EC_CIA402_DRIVE_HPP_
+#endif // ETHERCAT_GENERIC_PLUGINS__GENERIC_EC_CIA402_DRIVE_HPP_

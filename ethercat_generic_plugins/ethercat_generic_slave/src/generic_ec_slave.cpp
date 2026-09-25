@@ -17,156 +17,161 @@
 #include <numeric>
 
 #include "ethercat_generic_plugins/generic_ec_slave.hpp"
-#include "ethercat_interface/ec_pdo_single_interface_channel_manager.hpp"
-#include "ethercat_interface/ec_pdo_group_interface_channel_manager.hpp"
 
-namespace ethercat_generic_plugins
-{
-
-GenericEcSlave::GenericEcSlave()
-: EcSlaveBase() {}
-GenericEcSlave::~GenericEcSlave()
-{
-  for (size_t c = 0; c < pdo_channels_info_.size(); c++) {
-    delete pdo_channels_info_[c];
+size_t type2bytes(std::string type) {
+  if (type == "int8" || type == "uint8") {
+    return 1;
+  } else if (type == "int16" || type == "uint16") {
+    return 2;
+  } else if (type == "int32" || type == "uint32" || type == "float" ||
+             type == "real32") {
+    return 4;
+  } else if (type == "int64" || type == "uint64" || type == "real64" ||
+             type == "double") {
+    return 8;
   }
+  return 0;
 }
 
-int GenericEcSlave::assign_activate_dc_sync() {return assign_activate_;}
+namespace {
+  // ethercat_interface::SMConfig encodes type as 1=input / 0=output and
+  // watchdog as 1=enable / -1=disable / 0=default.
+  ec_direction_t sm_direction(int type) {
+    return type == 1 ? EC_DIR_INPUT : EC_DIR_OUTPUT;
+  }
+  ec_watchdog_mode_t sm_watchdog(int watchdog) {
+    return watchdog == 1 ? EC_WD_ENABLE
+                         : (watchdog == -1 ? EC_WD_DISABLE : EC_WD_DEFAULT);
+  }
+} // namespace
 
-void GenericEcSlave::process_data(int index, uint8_t * domain_address)
-{
-  if (index < 0 || static_cast<size_t>(index) >= pdo_channels_info_.size()) {
-    std::cerr   << "GenericEcSlave::process_data() - index " << index
-                << " out of bounds (pdo_channels_info size: "
-                << pdo_channels_info_.size() << ")" << std::endl;
-    return;
+namespace ethercat_generic_plugins {
+
+  GenericEcSlave::GenericEcSlave() : EcSlave(0, 0) {
   }
-  if (!pdo_channels_info_[index]) {
-    std::cerr << "GenericEcSlave::process_data() - null pointer at index " << index << std::endl;
-    return;
+  GenericEcSlave::~GenericEcSlave() {
   }
-  pdo_channels_info_[index]->ec_update(domain_address);
-}
-  /*
-  const ec_sync_info_t * GenericEcSlave::syncs()
-  {
+  int GenericEcSlave::assign_activate_dc_sync() {
+    return assign_activate_;
+  }
+
+  // bool GenericEcSlave::initialized() {
+  //   return true;
+  // }
+
+  void GenericEcSlave::processData(size_t index, uint8_t *domain_address) {
+    pdo_channels_info_[domain_map_[index]].ec_update(domain_address);
+  }
+
+  const ec_sync_info_t *GenericEcSlave::syncs() {
     return syncs_.data();
   }
-  size_t GenericEcSlave::syncSize()
-  {
+  size_t GenericEcSlave::syncSize() {
     return syncs_.size();
   }
-  const ec_pdo_entry_info_t * GenericEcSlave::channels()
-  {
+  const ec_pdo_entry_info_t *GenericEcSlave::channels() {
     return all_channels_.data();
   }
-  void GenericEcSlave::domains(DomainMap & domains) const
-  {
+  void GenericEcSlave::domains(DomainMap &domains) const {
     domains = {{0, domain_map_}};
   }
 
-  void GenericEcSlave::setup_syncs()
-  {
+  void GenericEcSlave::setup_syncs() {
     if (sm_configs_.size() == 0) {
       syncs_.push_back({0, EC_DIR_OUTPUT, 0, NULL, EC_WD_DISABLE});
       syncs_.push_back({1, EC_DIR_INPUT, 0, NULL, EC_WD_DISABLE});
       syncs_.push_back(
-        {2, EC_DIR_OUTPUT, (unsigned int)(rpdos_.size()), rpdos_.data(),
-          EC_WD_ENABLE});
+          {2, EC_DIR_OUTPUT, (unsigned int)(rpdos_.size()), rpdos_.data(),
+           EC_WD_ENABLE}
+      );
       syncs_.push_back(
-        {3, EC_DIR_INPUT, (unsigned int)(tpdos_.size()), tpdos_.data(),
-          EC_WD_DISABLE});
+          {3, EC_DIR_INPUT, (unsigned int)(tpdos_.size()), tpdos_.data(),
+           EC_WD_DISABLE}
+      );
     } else {
-      for (auto & sm : sm_configs_) {
+      for (auto &sm : sm_configs_) {
         if (sm.pdo_name == "null") {
-          syncs_.push_back({sm.index, sm.type, 0, NULL, sm.watchdog});
+          syncs_.push_back({sm.index, sm_direction(sm.type), 0, NULL, sm_watchdog(sm.watchdog)});
         } else if (sm.pdo_name == "rpdo") {
           syncs_.push_back(
-            {sm.index, sm.type, (unsigned int)(rpdos_.size()),
-              rpdos_.data(), sm.watchdog});
+              {sm.index, sm_direction(sm.type), (unsigned int)(rpdos_.size()), rpdos_.data(),
+               sm_watchdog(sm.watchdog)}
+          );
         } else if (sm.pdo_name == "tpdo") {
           syncs_.push_back(
-            {sm.index, sm.type, (unsigned int)(tpdos_.size()),
-              tpdos_.data(), sm.watchdog});
+              {sm.index, sm_direction(sm.type), (unsigned int)(tpdos_.size()), tpdos_.data(),
+               sm_watchdog(sm.watchdog)}
+          );
         }
       }
     }
     syncs_.push_back({0xff, EC_DIR_INVALID, 0, nullptr, EC_WD_DISABLE});
   }
-  */
 
-bool GenericEcSlave::setup_slave(
-  std::unordered_map<std::string, std::string> slave_parameters,
-  std::vector<double> *state_interface,
-  std::vector<double> *command_interface)
-{
-  state_interface_ptr_ = state_interface;
-  command_interface_ptr_ = command_interface;
-  parameters_ = slave_parameters;
+  bool GenericEcSlave::setupSlave(
+      std::unordered_map<std::string, std::string> slave_paramters,
+      std::unordered_map<std::string, std::vector<double>*> joint_state_interfaces,
+      std::unordered_map<std::string, std::vector<double>*> joint_command_interfaces)
+    {
+    joint_state_interfaces_ = joint_state_interfaces;
+    joint_command_interfaces_ = joint_command_interfaces;
+    paramters_ = slave_paramters;
 
-  if (parameters_.find("slave_config") != parameters_.end()) {
-    if (!setup_from_config_file(parameters_["slave_config"])) {
+    if (paramters_.find("slave_config") != paramters_.end()) {
+      if (!setup_from_config_file(paramters_["slave_config"])) {
+        return false;
+      }
+    } else {
+      std::cerr << "GenericEcSlave: failed to find 'slave_config' tag in URDF."
+                << std::endl;
       return false;
     }
-  } else {
-    std::cerr << "GenericEcSlave: failed to find 'slave_config' tag in URDF." << std::endl;
-    return false;
+
+    setup_interface_mapping();
+    setup_syncs();
+
+    return true;
   }
 
-  setup_interface_mapping();
-    //  setup_syncs();
+  bool GenericEcSlave::setup_from_config(YAML::Node slave_config) {
+    if (slave_config.size() != 0) {
+      if (slave_config["vendor_id"]) {
+        vendor_id_ = slave_config["vendor_id"].as<uint32_t>();
+      } else {
+        std::cerr << "GenericEcSlave: failed to load drive vendor ID."
+                  << std::endl;
+        return false;
+      }
+      if (slave_config["product_id"]) {
+        product_id_ = slave_config["product_id"].as<uint32_t>();
+      } else {
+        std::cerr << "GenericEcSlave: failed to load drive product ID."
+                  << std::endl;
+        return false;
+      }
+      if (slave_config["assign_activate"]) {
+        assign_activate_ = slave_config["assign_activate"].as<uint32_t>();
+      }
 
-  return true;
-}
-
-bool GenericEcSlave::setup_from_config(YAML::Node slave_config)
-{
-  if (slave_config.size() != 0) {
-    if (slave_config["vendor_id"]) {
-      vendor_id_ = slave_config["vendor_id"].as<uint32_t>();
-    } else {
-      std::cerr << "GenericEcSlave: failed to load drive vendor ID." << std::endl;
-      return false;
-    }
-    if (slave_config["product_id"]) {
-      product_id_ = slave_config["product_id"].as<uint32_t>();
-    } else {
-      std::cerr << "GenericEcSlave: failed to load drive product ID." << std::endl;
-      return false;
-    }
-    if (slave_config["assign_activate"]) {
-      assign_activate_ = slave_config["assign_activate"].as<uint32_t>();
-    }
-
-    if (slave_config["sm"]) {
-      for (const auto & sm : slave_config["sm"]) {
-        ethercat_interface::SMConfig config;
-        if (config.load_from_config(sm)) {
-          sm_config_.push_back(config);
+      if (slave_config["sm"]) {
+        for (const auto &sm : slave_config["sm"]) {
+          ethercat_interface::SMConfig config;
+          if (config.load_from_config(sm)) {
+            sm_configs_.push_back(config);
+          }
         }
       }
-    }
 
-    if (slave_config["sdo"]) {
-      for (const auto & sdo : slave_config["sdo"]) {
-        ethercat_interface::SdoConfigEntry config;
-        if (config.load_from_config(sdo)) {
-          sdo_config_.push_back(config);
+      if (slave_config["sdo"]) {
+        for (const auto &sdo : slave_config["sdo"]) {
+          ethercat_interface::SdoConfigEntry config;
+          if (config.load_from_config(sdo)) {
+            sdo_config.push_back(config);
+          }
         }
       }
-    }
 
-    if (slave_config["sdo_check"]) {
-      for (const auto & sdo_check : slave_config["sdo_check"]) {
-        ethercat_interface::SdoCheckEntry check;
-        if (check.load_from_config(sdo_check)) {
-          sdo_check_config_.push_back(check);
-        }
-      }
-    }
-
-      /*auto channels_nbr = 0;
+      auto channels_nbr = 0;
 
       if (slave_config["rpdo"]) {
         for (auto i = 0ul; i < slave_config["rpdo"].size(); i++) {
@@ -180,212 +185,186 @@ bool GenericEcSlave::setup_from_config(YAML::Node slave_config)
       }
 
       all_channels_.reserve(channels_nbr);
-      all_channels_skip_list_.reserve(channels_nbr);
-      channels_nbr = 0;*/
+      channels_nbr = 0;
 
-    if (slave_config["rpdo"]) {
-      for (auto i = 0ul; i < slave_config["rpdo"].size(); i++) {
-        auto rpdo_channels_size = slave_config["rpdo"][i]["channels"].size();
-        std::vector<ethercat_interface::EcPdoChannelManager *> rpdo_channels_info_;
-        for (auto c = 0ul; c < rpdo_channels_size; c++) {
-          ethercat_interface::EcPdoChannelManager *channel_info = nullptr;
-            // Check if the channel is a special data area holding several in memory data
-          if (slave_config["rpdo"][i]["channels"][c]["data_mapping"]) {
-            channel_info = new ethercat_interface::EcPdoGroupInterfaceChannelManager;
-          } else {
-            channel_info = new ethercat_interface::EcPdoSingleInterfaceChannelManager;
-          }
-
-          channel_info->pdo_type = ethercat_interface::RPDO;
-          channel_info->load_from_config(slave_config["rpdo"][i]["channels"][c]);
-          pdo_channels_info_.push_back(channel_info);
-            // all_channels_.push_back(channel_info->get_pdo_entry_info());
-            // all_channels_skip_list_.push_back(channel_info->skip);
-        }
-        ethercat_interface::pdo_info_t rpdo_info;
-        rpdo_info.index = slave_config["rpdo"][i]["index"].as<uint16_t>();
-        rpdo_info.n_entries = rpdo_channels_size;
-        rpdo_info.pdo_type = ethercat_interface::RPDO;
-        pdo_info_.push_back(rpdo_info);
-
-          /*ethercat_interface::pdo_mapping_t rpdo_mapping;
-          rpdo_mapping.pdo_type = ethercat_interface::RPDO;
-          rpdo_mapping.index = slave_config["rpdo"][i]["index"].as<uint16_t>();
-          rpdo_mapping.pdo_channel_config = rpdo_channels_info_;
-          pdo_config_.push_back(rpdo_mapping);
-          *rpdos_.push_back(
-            {
-              slave_config["rpdo"][i]["index"].as<uint16_t>(),
-              (unsigned int)(rpdo_channels_size),
-              all_channels_.data() + channels_nbr
+      if (slave_config["rpdo"]) {
+        for (auto i = 0ul; i < slave_config["rpdo"].size(); i++) {
+          auto rpdo_channels_size = slave_config["rpdo"][i]["channels"].size();
+          for (auto c = 0ul; c < rpdo_channels_size; c++) {
+            ethercat_interface::EcJointPdoChannelManager channel_info;
+            channel_info.pdo_type = ethercat_interface::RPDO;
+            if (slave_config["rpdo"][i]["for"]) {
+              channel_info.for_name =
+                  slave_config["rpdo"][i]["for"].as<std::string>();
             }
-          );
-          channels_nbr += rpdo_channels_size;*/
-      }
-    }
-
-    if (slave_config["tpdo"]) {
-      for (auto i = 0ul; i < slave_config["tpdo"].size(); i++) {
-        auto tpdo_channels_size = slave_config["tpdo"][i]["channels"].size();
-        std::vector<ethercat_interface::EcPdoChannelManager *> tpdo_channels_info_;
-        for (auto c = 0ul; c < tpdo_channels_size; c++) {
-          ethercat_interface::EcPdoChannelManager *channel_info = nullptr;
-            // Check if the channel is a special data area holding several in memory data
-          if (slave_config["tpdo"][i]["channels"][c]["data_mapping"]) {
-            channel_info = new ethercat_interface::EcPdoGroupInterfaceChannelManager;
-          } else {
-            channel_info = new ethercat_interface::EcPdoSingleInterfaceChannelManager;
-          }
-          channel_info->pdo_type = ethercat_interface::TPDO;
-          channel_info->load_from_config(slave_config["tpdo"][i]["channels"][c]);
-          pdo_channels_info_.push_back(channel_info);
-
-
-            // all_channels_.push_back(channel_info->get_pdo_entry_info());
-            // all_channels_skip_list_.push_back(channel_info->skip);
-        }
-        ethercat_interface::pdo_info_t tpdo_info;
-        tpdo_info.index = slave_config["tpdo"][i]["index"].as<uint16_t>();
-        tpdo_info.n_entries = tpdo_channels_size;
-        tpdo_info.pdo_type = ethercat_interface::TPDO;
-        pdo_info_.push_back(tpdo_info);
-          /*tpdos_.push_back(
-            {
-              slave_config["tpdo"][i]["index"].as<uint16_t>(),
-              (unsigned int)(tpdo_channels_size),
-              all_channels_.data() + channels_nbr
+            channel_info.load_from_config(slave_config["rpdo"][i]["channels"][c]
+            );
+            if (slave_config["rpdo"][i]["pdo_offset"]) {
+              channel_info.pdo_offset =
+                  slave_config["rpdo"][i]["pdo_offset"].as<uint16_t>();
             }
+            pdo_channels_info_.push_back(channel_info);
+            all_channels_.push_back(channel_info.get_pdo_entry_info());
+          }
+          rpdos_.push_back(
+              {slave_config["rpdo"][i]["index"].as<uint16_t>(),
+               (unsigned int)(rpdo_channels_size),
+               all_channels_.data() + channels_nbr}
           );
-          channels_nbr += tpdo_channels_size;*/
-          /*ethercat_interface::pdo_mapping_t tpdo_mapping;
-          tpdo_mapping.pdo_type = ethercat_interface::TPDO;
-          tpdo_mapping.index = slave_config["tpdo"][i]["index"].as<uint16_t>();
-          tpdo_mapping.pdo_channel_config = tpdo_channels_info_;
-          pdo_config_.push_back(tpdo_mapping);*/
+          channels_nbr += rpdo_channels_size;
+        }
       }
-    }
+
+      if (slave_config["tpdo"]) {
+        for (auto i = 0ul; i < slave_config["tpdo"].size(); i++) {
+          auto tpdo_channels_size = slave_config["tpdo"][i]["channels"].size();
+
+          for (auto c = 0ul; c < tpdo_channels_size; c++) {
+            ethercat_interface::EcJointPdoChannelManager channel_info;
+            channel_info.pdo_type = ethercat_interface::TPDO;
+            if (slave_config["tpdo"][i]["for"]) {
+              channel_info.for_name =
+                  slave_config["tpdo"][i]["for"].as<std::string>();
+            }
+            channel_info.load_from_config(slave_config["tpdo"][i]["channels"][c]
+            );
+            if (slave_config["tpdo"][i]["pdo_offset"]) {
+              channel_info.pdo_offset =
+                  slave_config["tpdo"][i]["pdo_offset"].as<uint16_t>();
+            }
+            pdo_channels_info_.push_back(channel_info);
+            all_channels_.push_back(channel_info.get_pdo_entry_info());
+          }
+          tpdos_.push_back(
+              {slave_config["tpdo"][i]["index"].as<uint16_t>(),
+               (unsigned int)(tpdo_channels_size),
+               all_channels_.data() + channels_nbr}
+          );
+          channels_nbr += tpdo_channels_size;
+        }
+      }
 
       // Remove gaps from domain mapping
-      /*for (auto i = 0ul; i < all_channels_.size(); i++) {
-        if (all_channels_[i].index != 0x0000 && all_channels_skip_list_[i] != true) {
+      for (auto i = 0ul; i < all_channels_.size(); i++) {
+        if (all_channels_[i].index != 0x0000) {
           domain_map_.push_back(i);
         }
-      }*/
+      }
 
-    return true;
-  } else {
-    std::cerr << "GenericEcSlave: failed to load slave configuration: empty configuration" <<
-      std::endl;
-    return false;
-  }
-}
-
-bool GenericEcSlave::setup_from_config_file(std::string config_file)
-{
-    // Read drive configuration from YAML file
-  try {
-    slave_config_ = YAML::LoadFile(config_file);
-  } catch (const YAML::ParserException & ex) {
-    std::cerr   << "GenericEcSlave: failed to load EtherCAT module configuration "
-      "(YAML file is incorrect): "
-                << ex.what() << std::endl;
-    return false;
-  } catch (const YAML::BadFile & ex) {
-    std::cerr   << "GenericEcSlave: failed to load EtherCAT module configuration "
-      "(file path is incorrect or file is damaged): "
-                << ex.what()
+      return true;
+    } else {
+      std::cerr << "GenericEcSlave: failed to load slave configuration: empty "
+                   "configuration"
                 << std::endl;
-    return false;
+      return false;
+    }
   }
-  if (!setup_from_config(slave_config_)) {
-    return false;
-  }
-  return true;
-}
 
-void GenericEcSlave::setup_interface_mapping()
-{
-  for (auto & channel_ptr : pdo_channels_info_) {
-    auto & channel = *channel_ptr;
-    for (size_t i = 0; i < channel.number_of_interfaces(); ++i) {
-      if (channel.has_state_interface_name(i)) {
-        std::string interface = "state_interface/" + channel.interface_name(i);
-        if (parameters_.find(interface) != parameters_.end()) {
-          const size_t idx = std::stoi(parameters_[interface]);
-          channel.set_state_interface_index(channel.interface_name(i), idx);
-        }
-      } else if (channel.has_command_interface_name(i)) {
-        std::string interface = "command_interface/" + channel.interface_name(i);
-        if (channel.pdo_type == ethercat_interface::RPDO) {
-          std::string interface = "command_interface/" + channel.interface_name(i);
-          if (parameters_.find(interface) != parameters_.end()) {
-            const size_t idx = std::stoi(parameters_[interface]);
-            channel.set_command_interface_index(channel.interface_name(i), idx);
+  bool GenericEcSlave::setup_from_config_file(std::string config_file) {
+    // Read drive configuration from YAML file
+    try {
+      slave_config_ = YAML::LoadFile(config_file);
+    } catch (const YAML::ParserException &ex) {
+      std::cerr << "GenericEcSlave: failed to load drive configuration: "
+                << ex.what() << std::endl;
+      return false;
+    } catch (const YAML::BadFile &ex) {
+      std::cerr << "GenericEcSlave: failed to load drive configuration: "
+                << ex.what() << std::endl;
+      return false;
+    }
+    if (!setup_from_config(slave_config_)) {
+      return false;
+    }
+    return true;
+  }
+
+  void GenericEcSlave::setup_interface_mapping() {
+    for (auto &channel : pdo_channels_info_) {
+
+      if (channel.for_name.empty()) {
+        // Check if only one interface is defined, if so, use it, otherwise throw error
+        // Loop over all parameters starting with state_interface and command_interface, then check what is behind /  and before the next / and set this as the channel for name. If any other channel is found, throw an error
+        std::string channel_name = "";
+        for (const auto &param : paramters_) {
+          if (param.first.find("state_interface/") == 0) {
+            std::string name = param.first.substr(16);
+            size_t pos = name.find("/");
+            if (pos != std::string::npos) {
+              name = name.substr(0, pos);
+            }
+            if (channel_name.empty()) {
+              channel_name = name;
+            } else if (channel_name != name) {
+              std::cerr << "GenericEcSlave: multiple channels found for the same interface" << std::endl;
+              // return; // Just select the first one. Normaly this only happens for mapped channels not linked to a specific joint
+            }
+          } else if (param.first.find("command_interface/") == 0) {
+            std::string name = param.first.substr(18);
+            size_t pos = name.find("/");
+            if (pos != std::string::npos) {
+              name = name.substr(0, pos);
+            }
+            if (channel_name.empty()) {
+              channel_name = name;
+            } else if (channel_name != name) {
+              std::cerr << "GenericEcSlave: multiple channels found for the same interface" << std::endl;
+              // return; // Just select the first one. Normaly this only happens for mapped channels not linked to a specific joint
+            }
           }
-        } else {
-          throw std::runtime_error(
-                std::string("GenericEcSlave: command interface (") +
-                "index: " + channel.index_hex_str() + ", " +
-                "sub_index: " + channel.sub_index_hex_str() + ", " +
-                "name: " + interface +
-                ") is not allowed for TPDO channels");
+        }
+        channel.for_name = channel_name;
+      } 
+      if (channel.pdo_type == ethercat_interface::TPDO) {
+        if (paramters_.find("state_interface/" + channel.for_name + "/" + channel.interface_name) !=
+            paramters_.end()) {
+          channel.interface_index = std::stoi(
+              paramters_["state_interface/" + channel.for_name + "/" + channel.interface_name]
+          );
         }
       }
-    }
-
-    channel.setup_interface_ptrs(state_interface_ptr_, command_interface_ptr_);
-  }
-}
-
-  /*void GenericEcSlave::setup_interface_mapping()
-  {
-    for (auto &mapping : pdo_config_)
-    {
-      for (auto &channel_ptr : mapping.pdo_channel_config)
-      {
-        auto &channel = *channel_ptr;
-        for (size_t i = 0; i < channel.number_of_interfaces(); ++i)
-        {
-          if (channel.has_state_interface_name(i))
-          {
-            std::string interface = "state_interface/" + channel.interface_name(i);
-            if (parameters_.find(interface) != parameters_.end())
-            {
-              const size_t idx = std::stoi(parameters_[interface]);
-              channel.set_state_interface_index(channel.interface_name(i), idx);
-            }
-          }
-          else if (channel.has_command_interface_name(i))
-          {
-            std::string interface = "command_interface/" + channel.interface_name(i);
-            if (channel.pdo_type == ethercat_interface::RPDO)
-            {
-              std::string interface = "command_interface/" + channel.interface_name(i);
-              if (parameters_.find(interface) != parameters_.end())
-              {
-                const size_t idx = std::stoi(parameters_[interface]);
-                channel.set_command_interface_index(channel.interface_name(i), idx);
-              }
-            }
-            else
-            {
-              throw std::runtime_error(
-                  std::string("GenericEcSlave: command interface (") +
-                  "index: " + channel.index_hex_str() + ", " +
-                  "sub_index: " + channel.sub_index_hex_str() + ", " +
-                  "name: " + interface +
-                  ") is not allowed for TPDO channels");
-            }
+      if (channel.pdo_type == ethercat_interface::RPDO) {
+        if (paramters_.find("command_interface/" + channel.for_name + "/" + channel.interface_name) !=
+            paramters_.end()) {
+          channel.interface_index = std::stoi(
+              paramters_["command_interface/" + channel.for_name + "/" + channel.interface_name]
+          );
+          if (channel.read &&
+              paramters_.find("state_interface/" + channel.for_name + "/" + channel.interface_name) !=
+                  paramters_.end()) {
+            channel.interface_index_state_for_command = std::stoi(
+                paramters_["state_interface/" + channel.for_name + "/" + channel.interface_name]
+            );
           }
         }
-
-        channel.setup_interface_ptrs(state_interface_ptr_, command_interface_ptr_);
       }
+      
+      // std::cout << "Channel: " << channel.for_name << " Setup interface pointers " << std::endl;
+      // check if channel.for_name is in joint_state_interfaces_ and joint_command_interfaces_
+      if (joint_state_interfaces_.find(channel.for_name) == joint_state_interfaces_.end()) {
+        std::cerr << "GenericEcSlave: channel " << channel.for_name << " not found in joint_state_interfaces_" << std::endl;
+        for (auto &joint : joint_state_interfaces_) {
+          std::cerr << "GenericEcSlave: joint_state_interfaces_ " << joint.first << std::endl;
+        }
+        continue;
+      }
+      if (joint_command_interfaces_.find(channel.for_name) == joint_command_interfaces_.end()) {
+        std::cerr << "GenericEcSlave: channel " << channel.for_name << " not found in joint_command_interfaces_" << std::endl;
+        for (auto &joint : joint_command_interfaces_) {
+          std::cerr << "GenericEcSlave: joint_command_interfaces_ " << joint.first << std::endl;
+        }
+        continue;
+      }
+      channel.setup_interface_ptrs(
+          joint_state_interfaces_[channel.for_name], joint_command_interfaces_[channel.for_name]
+      );
     }
-  }*/
+  }
 
-}  //  namespace ethercat_generic_plugins
+} // namespace ethercat_generic_plugins
 
 #include <pluginlib/class_list_macros.hpp>
 
-PLUGINLIB_EXPORT_CLASS(ethercat_generic_plugins::GenericEcSlave, ethercat_interface::EcSlaveBase)
+PLUGINLIB_EXPORT_CLASS(
+    ethercat_generic_plugins::GenericEcSlave, ethercat_interface::EcSlave
+)

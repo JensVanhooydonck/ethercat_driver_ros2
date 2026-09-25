@@ -18,6 +18,16 @@ find_package(ament_cmake_ros REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 
+# The EcSlave plugin model (ec_slave.hpp, ec_joint_pdo_channel_manager.hpp,
+# ec_sync_manager users building ec_sync_info_t) is IgH-specific: export the
+# ecrt.h include directory so EcSlave plugins find it through this package.
+# Header only (EC_READ_*/EC_WRITE_* macros, structs): the library stays IgH-free.
+set(ETHERLAB_LOCAL_DIR /usr/local/etherlab)
+find_path(ETHERCAT_INCLUDE_DIR NAMES ecrt.h PATHS ${ETHERLAB_LOCAL_DIR}/include)
+if(NOT ETHERCAT_INCLUDE_DIR)
+  message(WARNING "ecrt.h not found: EcSlave plugins will not compile against ethercat_interface")
+endif()
+
 add_library(
   ${PROJECT_NAME}
   SHARED
@@ -77,6 +87,9 @@ endif()
 ament_export_include_directories(
   include
 )
+if(ETHERCAT_INCLUDE_DIR)
+  ament_export_include_directories(${ETHERCAT_INCLUDE_DIR})
+endif()
 
 ament_export_dependencies(
   rclcpp

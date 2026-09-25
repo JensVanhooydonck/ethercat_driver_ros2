@@ -24,7 +24,6 @@
 #define CiA402D_TPDO_POSITION ((uint16_t) 0x6064)
 #define CiA402D_TPDO_STATUSWORD  ((uint16_t) 0x6041)
 #define CiA402D_TPDO_MODE_OF_OPERATION_DISPLAY  ((uint16_t) 0x6061)
-#define CiA402D_TPDO_ERROR_CODE  ((uint16_t) 0x603f)
 
 #include <map>
 #include <string>
@@ -40,7 +39,9 @@ enum DeviceState
   STATE_OPERATION_ENABLED,
   STATE_QUICK_STOP_ACTIVE,
   STATE_FAULT_REACTION_ACTIVE,
-  STATE_FAULT
+  STATE_FAULT,
+  STATE_NEW_TARGET,
+  STATE_NEW_TARGET_RESET
 };
 
 enum ModeOfOperation
@@ -66,7 +67,9 @@ const std::map<DeviceState, std::string> DEVICE_STATE_STR = {
   {STATE_QUICK_STOP_ACTIVE, "Quick Stop Active"},
   {STATE_FAULT_REACTION_ACTIVE, "Fault Reaction Active"},
   {STATE_FAULT, "Fault"},
-  {STATE_UNDEFINED, "Undefined State"}
+  {STATE_UNDEFINED, "Undefined State"},
+  {STATE_NEW_TARGET, "STATE_NEW_TARGET"},
+  {STATE_NEW_TARGET_RESET, "STATE_NEW_TARGET_RESET"}
 };
 
 #endif  // ETHERCAT_GENERIC_PLUGINS__CIA402_COMMON_DEFS_HPP_
