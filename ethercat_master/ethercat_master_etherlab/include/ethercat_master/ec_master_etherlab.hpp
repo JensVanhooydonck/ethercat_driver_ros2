@@ -215,6 +215,55 @@ private:
     const ec_pdo_entry_reg_t & pdo_entry_reg);*/
 
 
+  /** CLOCK_MONOTONIC in ns: the one clock used for the application time. It is
+   *  the clock ros2_control_node schedules its loop on (std::chrono::steady_clock). */
+  static uint64_t monotonicNs();
+
+  /** Pass monotonic time + app_time_offset_ns_ to the master as application
+   *  time. The first value after activation becomes IgH's dc_ref_time. */
+  void setApplicationTime(uint64_t now);
+
+  /** Phase of an application time relative to SYNC0, in [0, interval_). */
+  uint64_t sync0Phase(uint64_t app_time) const;
+
+  /** Keep the send phase half a cycle away from SYNC0 (see write_process_data). */
+  void lockSendPhase(uint64_t now);
+
+  /** Log the frame-to-SYNC0 margin measured in read_process_data() every 10 s. */
+  void reportSync0Margin();
+
+  /** Forget all DC phase state (IgH resets dc_ref_time on deactivation). */
+  void resetDcPhase();
+
+  /** First application time passed = IgH dc_ref_time: SYNC0 fires whenever the DC
+   *  system time is sync0_shift_ns_ + a multiple of interval_ after it. */
+  bool has_dc_ref_time_ = false;
+  uint64_t dc_ref_time_ = 0;
+  uint32_t sync0_shift_ns_ = 0;
+  bool has_dc_slaves_ = false;
+
+  /** application time = CLOCK_MONOTONIC + this; stepped by lockSendPhase() */
+  int64_t app_time_offset_ns_ = 0;
+  uint64_t last_app_time_ = 0;
+
+  /** send phase relative to SYNC0: exponential circular mean over ~kPhaseSamples
+   *  cycles, and how long it has been off target */
+  static constexpr uint32_t kPhaseSamples = 250;
+  uint32_t phase_samples_ = 0;
+  double phase_mean_cos_ = 0.0;
+  double phase_mean_sin_ = 0.0;
+  uint32_t phase_off_target_ = 0;
+  uint32_t phase_steps_ = 0;
+  int64_t last_step_ns_ = 0;
+
+  /** frame-to-SYNC0 margin window (see read_process_data) */
+  uint32_t margin_samples_ = 0;
+  int64_t margin_min_ns_ = 0;
+  int64_t margin_max_ns_ = 0;
+  int64_t margin_sum_ns_ = 0;
+  uint64_t margin_report_cycles_ = 0;
+  int margin_reports_ = 0;
+
   /** EtherCAT master data */
   ec_master_t * master_ = NULL;
   ec_master_state_t master_state_ = {};
