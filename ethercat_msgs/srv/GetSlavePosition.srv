@@ -1,0 +1,6 @@
+int16 master_id
+uint16 alias
+uint16 position
+---
+bool success
+uint16 slave_position
