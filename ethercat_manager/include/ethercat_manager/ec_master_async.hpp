@@ -168,7 +168,11 @@ public:
       );
       return -1;
     }
-      
+    RCLCPP_ERROR(
+        rclcpp::get_logger("ethercat_manager"),
+        "No slave configured at alias %u and position %u", alias, position
+    );
+    return -1;  // > uint16 max: callers treat it as not found
   }
 
 private:
