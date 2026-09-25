@@ -73,6 +73,14 @@ protected:
   std::vector<std::vector<double>> hw_gpio_states_;
 
   EthercatBusManager bus_manager_;
+
+  /** Build one ConfiguredEcModule per distinct <ec_module> name (see implementation). */
+  bool collectEcModules(std::vector<ConfiguredEcModule> & configured_modules);
+
+  // Idle interface vectors for joints a shared slave_config lists but that are hosted
+  // on another controller manager (partial-sim). unordered_map keeps pointers stable.
+  std::unordered_map<std::string, std::vector<double>> dummy_component_states_;
+  std::unordered_map<std::string, std::vector<double>> dummy_component_commands_;
 };
 }  // namespace ethercat_driver
 

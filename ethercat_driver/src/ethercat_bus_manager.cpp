@@ -76,6 +76,8 @@ pluginlib::ClassLoader<ethercat_interface::EcMasterBase>
 EthercatBusManager::ec_master_loader_{"ethercat_interface", "ethercat_interface::EcMasterBase"};
 pluginlib::ClassLoader<ethercat_interface::EcSlaveBase>
 EthercatBusManager::ec_slave_loader_{"ethercat_interface", "ethercat_interface::EcSlaveBase"};
+pluginlib::ClassLoader<ethercat_interface::EcSlave>
+EthercatBusManager::ec_joint_slave_loader_{"ethercat_interface", "ethercat_interface::EcSlave"};
 
 
 unsigned int uint_from_string(const std::string & str)
@@ -185,19 +187,39 @@ bool EthercatBusManager::configureModules(
 
   for (const auto & configured_module : modules) {
     try {
-      auto module =
-        ec_slave_loader_.createSharedInstance(configured_module.parameters.at("plugin"));
-      if (!module->setup_slave(
-          configured_module.parameters,
-          configured_module.input_values,
-          configured_module.output_values))
-      {
-        RCLCPP_FATAL(
-          rclcpp::get_logger("EthercatBusManager"),
-          "Setup of %s module %zu FAILED.",
-          configured_module.module_type.c_str(),
-          configured_module.module_number);
-        return false;
+      const auto & plugin = configured_module.parameters.at("plugin");
+      std::shared_ptr<ethercat_interface::EcSlaveBase> module;
+      if (ec_joint_slave_loader_.isClassAvailable(plugin)) {
+        // Multi-joint EcSlave plugin: gets the interfaces of every component it serves.
+        auto ec_slave = ec_joint_slave_loader_.createSharedInstance(plugin);
+        if (!ec_slave->setupSlave(
+            configured_module.parameters,
+            configured_module.component_states,
+            configured_module.component_commands))
+        {
+          RCLCPP_FATAL(
+            rclcpp::get_logger("EthercatBusManager"),
+            "Setup of %s module %zu (%s) FAILED.",
+            configured_module.module_type.c_str(),
+            configured_module.module_number,
+            configured_module.component_name.c_str());
+          return false;
+        }
+        module = ec_slave;
+      } else {
+        module = ec_slave_loader_.createSharedInstance(plugin);
+        if (!module->setup_slave(
+            configured_module.parameters,
+            configured_module.input_values,
+            configured_module.output_values))
+        {
+          RCLCPP_FATAL(
+            rclcpp::get_logger("EthercatBusManager"),
+            "Setup of %s module %zu FAILED.",
+            configured_module.module_type.c_str(),
+            configured_module.module_number);
+          return false;
+        }
       }
       module->setAliasAndPosition(
         getAliasOrDefaultAlias(configured_module.parameters),
@@ -567,9 +589,28 @@ bool EthercatBusManager::waitForSlavesOperational()
         break;
       }
     }
+    // Also wait until every module reports initialized() (an EcSlave plugin: its
+    // first OPERATIONAL seen; EcCiA402Drive: every axis walked to Operation
+    // Enabled), so controllers never start on interfaces that are not live yet.
+    if (all_operational) {
+      for (size_t i = 0; i < ec_modules_.size(); i++) {
+        if (!ec_modules_[i]->initialized()) {
+          if (not_initialized_module_ != i) {
+            RCLCPP_INFO(
+              rclcpp::get_logger("EthercatBusManager"), "EC module not initialized: %s",
+              i < ec_module_parameters_.size() ?
+              ec_module_parameters_[i].at("name").c_str() : "?");
+            not_initialized_module_ = i;
+          }
+          all_operational = false;
+          break;
+        }
+      }
+    }
     if (all_operational) {
       RCLCPP_INFO(
-        rclcpp::get_logger("EthercatBusManager"), "All slaves reached OPERATIONAL.");
+        rclcpp::get_logger("EthercatBusManager"),
+        "All slaves reached OPERATIONAL and all modules are initialized.");
       return true;
     }
 

@@ -30,6 +30,7 @@
 
 #include "ethercat_interface/ec_master_base.hpp"
 #include "ethercat_interface/ec_slave_base.hpp"
+#include "ethercat_interface/ec_slave.hpp"
 
 #include "yaml-cpp/yaml.h"
 
@@ -44,6 +45,10 @@ struct ConfiguredEcModule
   std::string component_name;
   std::string module_type;
   size_t module_number;
+  /** ethercat_interface::EcSlave plugins (multi-joint): the interface vectors of
+   *  every joint/gpio/sensor this module serves, keyed by component name. */
+  std::unordered_map<std::string, std::vector<double> *> component_states;
+  std::unordered_map<std::string, std::vector<double> *> component_commands;
 };
 
 /** Bus-wide EtherCAT settings independent of the ros2_control HardwareInfo representation. */
@@ -219,6 +224,8 @@ protected:
 
   static pluginlib::ClassLoader<ethercat_interface::EcMasterBase> ec_master_loader_;
   static pluginlib::ClassLoader<ethercat_interface::EcSlaveBase> ec_slave_loader_;
+  /** loader for ethercat_interface::EcSlave (multi-joint) plugins; tried first */
+  static pluginlib::ClassLoader<ethercat_interface::EcSlave> ec_joint_slave_loader_;
 
   double control_frequency_;
 
@@ -234,6 +241,8 @@ protected:
   // activateBusLocked() rebuilds it via registerSlaves() alone before activating.
   bool network_registered_{false};
   bool activated_{false};
+  // Last module reported as not initialized by waitForSlavesOperational() (log on change).
+  size_t not_initialized_module_{static_cast<size_t>(-1)};
 
   /** Transfer nets */
   std::vector<ethercat_interface::EcTransferNet> ec_transfer_nets_;
