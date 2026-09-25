@@ -95,7 +95,59 @@ namespace ethercat_interface {
       void readData(uint32_t domain = 0);
       void writeData(uint32_t domain = 0);
 
+      /** Where the command frames arrive relative to the drives' SYNC0, measured
+       *  on the DC reference clock. margin = time from the frame passing the
+       *  reference slave until the next SYNC0: ~interval/2 is ideal, close to 0 or
+       *  to interval means the drives alternately latch a stale and a fresh setpoint. */
+      struct Sync0Stats {
+          bool phase_locked = false;   // send phase has been locked (see writeData)
+          int64_t lock_step_ns = 0;    // app-time step applied when locking
+          uint32_t samples = 0;        // valid reference-clock reads in the window
+          int64_t min_margin_ns = 0;
+          int64_t max_margin_ns = 0;
+          int64_t mean_margin_ns = 0;
+      };
+
+      /** Stats since the previous call (resets the window). False when there is
+       *  no DC reference clock or no valid sample yet. */
+      bool takeSync0Stats(Sync0Stats &stats);
+
     private:
+      /** CLOCK_MONOTONIC in ns: the ONE clock used for application time, the same
+       *  clock ros2_control_node schedules its loop on (std::chrono::steady_clock). */
+      static uint64_t monotonicNs();
+
+      /** Pass monotonic time + app_time_offset_ns_ to the master. The first value
+       *  ever passed becomes the master's dc_ref_time. */
+      uint64_t setApplicationTime(uint64_t now = monotonicNs());
+
+      /** Phase of app time t relative to SYNC0, in [0, interval_). */
+      uint64_t sync0Phase(uint64_t app_time) const;
+
+      /** first application time passed = IgH dc_ref_time; SYNC0 fires when the DC
+       *  system time is a multiple of interval_ after it (sync0 shift is 0) */
+      uint64_t dc_ref_time_ = 0;
+      bool has_dc_slaves_ = false;
+
+      /** app time = CLOCK_MONOTONIC + this; stepped once by the send-phase lock */
+      int64_t app_time_offset_ns_ = 0;
+      uint64_t last_app_time_ = 0;
+
+      /** send-phase lock: circular mean of the send phase over the first
+       *  kPhaseLockSamples writeData() calls */
+      static constexpr uint32_t kPhaseLockSamples = 250;
+      uint32_t phase_samples_ = 0;
+      double phase_sum_cos_ = 0.0;
+      double phase_sum_sin_ = 0.0;
+      bool phase_locked_ = false;
+      int64_t lock_step_ns_ = 0;
+
+      /** SYNC0 margin window (readData) */
+      uint32_t margin_samples_ = 0;
+      int64_t margin_min_ns_ = 0;
+      int64_t margin_max_ns_ = 0;
+      int64_t margin_sum_ns_ = 0;
+
       /** true if running */
       volatile bool running_ = false;
 

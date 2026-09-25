@@ -642,8 +642,44 @@ namespace ethercat_driver {
     const std::unique_lock<std::mutex> lock(ec_mutex_, std::try_to_lock);
     if (lock.owns_lock() && activated_) {
       master_.writeData();
+      reportSync0Margin();
     }
     return hardware_interface::return_type::OK;
+  }
+
+  void EthercatDriver::reportSync0Margin() {
+    // Where the command frames land relative to the drives' SYNC0 (see
+    // EcMaster::writeData). ~interval/2 = good; near 0 or interval = drives
+    // alternately latch stale/fresh setpoints -> choppy motion.
+    if (++sync0_report_cycles_ < 10ull * static_cast<uint64_t>(control_frequency_)) {
+      return;
+    }
+    sync0_report_cycles_ = 0;
+    ethercat_interface::EcMaster::Sync0Stats st;
+    if (!master_.takeSync0Stats(st)) {
+      return;
+    }
+    const int64_t interval = master_.getInterval();
+    const int64_t guard = 500000;  // 0.5 ms
+    const bool bad = st.min_margin_ns < guard || st.max_margin_ns > interval - guard;
+    const bool startup = sync0_reports_ < 6;
+    ++sync0_reports_;
+    if (!bad && !startup) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("EthercatDriver"),
+        "SYNC0 margin mean %.3f ms [%.3f .. %.3f] of %.3f ms cycle (%u samples)",
+        st.mean_margin_ns / 1e6, st.min_margin_ns / 1e6, st.max_margin_ns / 1e6,
+        interval / 1e6, st.samples);
+      return;
+    }
+    RCLCPP_WARN(
+      rclcpp::get_logger("EthercatDriver"),
+      "SYNC0 margin mean %.3f ms [%.3f .. %.3f] of %.3f ms cycle (%u samples, "
+      "phase %s, lock step %.3f ms)%s",
+      st.mean_margin_ns / 1e6, st.min_margin_ns / 1e6, st.max_margin_ns / 1e6,
+      interval / 1e6, st.samples, st.phase_locked ? "locked" : "measuring",
+      st.lock_step_ns / 1e6,
+      bad ? " -- frames arrive close to SYNC0, drives may move choppy" : "");
   }
 
   std::vector<std::unordered_map<std::string, std::string>>

@@ -25,9 +25,7 @@
 #include <string.h>
 #include <iostream>
 #include <sstream>
-
-#define EC_NEWTIMEVAL2NANO(TV)                                                 \
-  (((TV).tv_sec - 946684800ULL) * 1000000000ULL + (TV).tv_nsec)
+#include <cmath>
 
 namespace ethercat_interface {
 
@@ -88,17 +86,16 @@ namespace ethercat_interface {
     // check and setup dc
 
     if (slave->assign_activate_dc_sync()) {
-      struct timespec t;
-      clock_gettime(CLOCK_MONOTONIC, &t);
-      ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+      // SYNC0 shift 0 for every slave: IgH starts SYNC0 in phase with dc_ref_time
+      // (the first application time, see setApplicationTime), so all drives share
+      // one SYNC0 phase. writeData() then moves the send phase to mid-cycle.
+      // (Was: shift = interval - CLOCK_MONOTONIC.tv_nsec % interval, taken at each
+      // addSlave -> a random, per-slave SYNC0 phase vs the controller manager's send.)
+      setApplicationTime();
+      has_dc_slaves_ = true;
       ecrt_slave_config_dc(
-          slave_info.config, slave->assign_activate_dc_sync(), interval_,
-          interval_ - (t.tv_nsec % (interval_)), 0, 0
+          slave_info.config, slave->assign_activate_dc_sync(), interval_, 0, 0, 0
       );
-      // ecrt_slave_config_dc(
-      //     slave_info.config, slave->assign_activate_dc_sync(), interval_,
-      //     interval_ / 2.0, 0,0
-      // );
     }
 
     slave_info_.push_back(slave_info);
@@ -235,9 +232,10 @@ namespace ethercat_interface {
       }
     }
     // set application time
-    struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+    phase_locked_ = false;
+    phase_samples_ = 0;
+    phase_sum_cos_ = phase_sum_sin_ = 0.0;
+    setApplicationTime();
 
     // activate master
     bool activate_status = ecrt_master_activate(master_);
@@ -289,10 +287,7 @@ namespace ethercat_interface {
     }
 
     // if (update_counter_ % check_state_frequency_ == 0) {
-      struct timespec t;
-
-      clock_gettime(CLOCK_REALTIME, &t);
-      ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+      setApplicationTime();
       ecrt_master_sync_reference_clock(master_);
       ecrt_master_sync_slave_clocks(master_);
 
@@ -307,6 +302,24 @@ namespace ethercat_interface {
   void EcMaster::readData(uint32_t domain) {
     // receive process data
     ecrt_master_receive(master_);
+
+    // SYNC0 margin of the frame sent by the previous writeData(): the reference
+    // clock's DC time when that frame passed it (lower 32 bit, widened around the
+    // app time we sent with it) -> time until the next SYNC0.
+    uint32_t ref_time32;
+    if (has_dc_slaves_ && last_app_time_ &&
+        ecrt_master_reference_clock_time(master_, &ref_time32) == 0)
+    {
+      const int32_t diff = static_cast<int32_t>(
+          ref_time32 - static_cast<uint32_t>(last_app_time_));
+      const uint64_t ref_time = last_app_time_ + diff;
+      const uint64_t phase = sync0Phase(ref_time);
+      const int64_t margin = phase ? interval_ - phase : 0;
+      if (margin_samples_ == 0 || margin < margin_min_ns_) {margin_min_ns_ = margin;}
+      if (margin_samples_ == 0 || margin > margin_max_ns_) {margin_max_ns_ = margin;}
+      margin_sum_ns_ += margin;
+      ++margin_samples_;
+    }
 
     DomainInfo *domain_info = domain_info_.at(domain);
     if (domain_info == NULL) {
@@ -346,16 +359,79 @@ namespace ethercat_interface {
       }
     }
 
-    struct timespec t;
-
-    clock_gettime(CLOCK_REALTIME, &t);
-    ecrt_master_application_time(master_, EC_NEWTIMEVAL2NANO(t));
+    // Send-phase lock. ros2_control_node sends this frame at a fixed phase of
+    // its CLOCK_MONOTONIC period grid (overruns skip whole periods), but that
+    // phase is arbitrary per startup, while SYNC0 was put in phase with
+    // dc_ref_time during activation. Measure the send phase over the first
+    // kPhaseLockSamples cycles and step the app time once, so that the DC clocks
+    // (which follow app time) put SYNC0 half a cycle after each send. The DC
+    // clocks slew to the step in hardware; the step is at most interval/2 and in
+    // the direction that moves SYNC0 away from the send, never through it.
+    const uint64_t now = monotonicNs();
+    if (has_dc_slaves_ && !phase_locked_) {
+      const double angle = 2.0 * M_PI *
+        static_cast<double>(sync0Phase(now + app_time_offset_ns_)) / interval_;
+      phase_sum_cos_ += std::cos(angle);
+      phase_sum_sin_ += std::sin(angle);
+      if (++phase_samples_ >= kPhaseLockSamples) {
+        const double mean_send_phase =
+          std::atan2(phase_sum_sin_, phase_sum_cos_) / (2.0 * M_PI) * interval_;
+        const int64_t half = interval_ / 2;
+        int64_t step = half - static_cast<int64_t>(std::llround(mean_send_phase));
+        step %= static_cast<int64_t>(interval_);
+        if (step > half) {step -= interval_;}
+        if (step <= -half) {step += interval_;}
+        app_time_offset_ns_ += step;
+        lock_step_ns_ = step;
+        phase_locked_ = true;
+      }
+    }
+    setApplicationTime(now);
     ecrt_master_sync_reference_clock(master_);
     ecrt_master_sync_slave_clocks(master_);
 
     // send process data
     ecrt_domain_queue(domain_info->domain);
     ecrt_master_send(master_);
+  }
+
+  uint64_t EcMaster::monotonicNs() {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return static_cast<uint64_t>(t.tv_sec) * 1000000000ULL + t.tv_nsec;
+  }
+
+  uint64_t EcMaster::setApplicationTime(uint64_t now) {
+    const uint64_t app_time = now + app_time_offset_ns_;
+    ecrt_master_application_time(master_, app_time);
+    if (dc_ref_time_ == 0) {
+      dc_ref_time_ = app_time;  // IgH takes the first app time as dc_ref_time
+    }
+    last_app_time_ = app_time;
+    return app_time;
+  }
+
+  uint64_t EcMaster::sync0Phase(uint64_t app_time) const {
+    if (interval_ == 0) {return 0;}
+    int64_t r = static_cast<int64_t>(app_time - dc_ref_time_) %
+      static_cast<int64_t>(interval_);
+    if (r < 0) {r += interval_;}
+    return static_cast<uint64_t>(r);
+  }
+
+  bool EcMaster::takeSync0Stats(Sync0Stats &stats) {
+    if (!has_dc_slaves_ || margin_samples_ == 0) {
+      return false;
+    }
+    stats.phase_locked = phase_locked_;
+    stats.lock_step_ns = lock_step_ns_;
+    stats.samples = margin_samples_;
+    stats.min_margin_ns = margin_min_ns_;
+    stats.max_margin_ns = margin_max_ns_;
+    stats.mean_margin_ns = margin_sum_ns_ / margin_samples_;
+    margin_samples_ = 0;
+    margin_sum_ns_ = 0;
+    return true;
   }
 
   void EcMaster::setCtrlCHandler(SIMPLECAT_EXIT_CALLBACK user_callback) {

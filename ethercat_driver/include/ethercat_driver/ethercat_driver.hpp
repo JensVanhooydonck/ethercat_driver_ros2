@@ -90,10 +90,15 @@ private:
   pluginlib::ClassLoader<ethercat_interface::EcSlave> ec_loader_{
     "ethercat_interface", "ethercat_interface::EcSlave"};
 
+  void reportSync0Margin();
+
   int control_frequency_;
   ethercat_interface::EcMaster master_;
   std::mutex ec_mutex_;
   bool activated_;
+  // SYNC0 margin report (write()): every 10 s, WARN for the first minute
+  uint64_t sync0_report_cycles_ = 0;
+  int sync0_reports_ = 0;
 };
 }  // namespace ethercat_driver
 
