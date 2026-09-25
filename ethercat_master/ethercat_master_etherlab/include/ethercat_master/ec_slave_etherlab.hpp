@@ -28,6 +28,7 @@
 
 #include "ethercat_interface/ec_sdo_manager.hpp"
 #include "ethercat_interface/ec_slave_base.hpp"
+#include "ethercat_interface/ec_slave.hpp"
 
 namespace ethercat_master
 {
@@ -55,8 +56,18 @@ public:
 
   std::shared_ptr<ethercat_interface::EcSlaveBase> get_slave() {return slave_;}
 
+  /** index to pass to process_data() for the i-th PDO entry of this slave in the
+   *  domain: the entry position for an EcSlave plugin (it maps it itself), the
+   *  channel index for an EcSlaveBase plugin. */
+  inline unsigned int process_data_index(size_t i) const
+  {
+    return ec_slave_ ? static_cast<unsigned int>(i) : domain_map_[i];
+  }
+
 protected:
   std::shared_ptr<ethercat_interface::EcSlaveBase> slave_;
+  /** set when slave_ is an EcSlave plugin: it provides its own sync/PDO/domain layout */
+  std::shared_ptr<ethercat_interface::EcSlave> ec_slave_;
 
   std::vector<ec_pdo_info_t> rpdos_;
   std::vector<ec_pdo_info_t> tpdos_;

@@ -21,7 +21,10 @@ namespace ethercat_master
 EtherlabSlave::EtherlabSlave(std::shared_ptr<ethercat_interface::EcSlaveBase> slave)
 {
   slave_ = slave;
-  setup_slave();
+  ec_slave_ = std::dynamic_pointer_cast<ethercat_interface::EcSlave>(slave);
+  if (!ec_slave_) {
+    setup_slave();
+  }
 }
 int EtherlabSlave::assign_activate_dc_sync()
 {
@@ -125,21 +128,25 @@ EtherlabSlave::~EtherlabSlave()
 
 size_t EtherlabSlave::sync_size()
 {
-  return syncs_.size();
+  return ec_slave_ ? ec_slave_->syncSize() : syncs_.size();
 }
 
 const ec_sync_info_t * EtherlabSlave::syncs()
 {
-  return syncs_.data();
+  return ec_slave_ ? ec_slave_->syncs() : syncs_.data();
 }
 void EtherlabSlave::domains(DomainMap & domains) const
 {
+  if (ec_slave_) {
+    ec_slave_->domains(domains);
+    return;
+  }
   domains = {{0, domain_map_}};
 }
 
 const ec_pdo_entry_info_t * EtherlabSlave::channels()
 {
-  return all_channels_.data();
+  return ec_slave_ ? ec_slave_->channels() : all_channels_.data();
 }
 
 bool EtherlabSlave::initialized()

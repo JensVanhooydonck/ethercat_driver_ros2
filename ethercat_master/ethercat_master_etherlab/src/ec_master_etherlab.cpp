@@ -595,18 +595,14 @@ bool EtherlabMaster::read_process_data()
   }
 
   // read and write process data
-  EtherlabSlave::DomainMap domain_map;
-  std::vector<unsigned int> domain_map_;
   for (DomainInfo::Entry & entry : domain_info->entries) {
     std::shared_ptr<ethercat_interface::EcSlaveBase> slave = entry.slave->get_slave();
-    entry.slave->domains(domain_map);
-    domain_map_ = domain_map.at(0);
 
     // processDataSafe()/updateStateSafe() isolate a slave plugin's exception so it can't abort
     // the bus cycle for the other slaves; see EcSlaveBase.
     bool ok = true;
     for (auto i = 0; ok && i < entry.num_pdos; ++i) {
-      auto index = domain_map_[i];
+      auto index = entry.slave->process_data_index(i);
       ok = slave->processDataSafe(index, domain_info->domain_pd + entry.offset[i]);
     }
     if (ok) {
@@ -629,18 +625,14 @@ bool EtherlabMaster::write_process_data()
   }
 
   // read and write process data
-  EtherlabSlave::DomainMap domain_map;
-  std::vector<unsigned int> domain_map_;
   for (DomainInfo::Entry & entry : domain_info->entries) {
     std::shared_ptr<ethercat_interface::EcSlaveBase> slave = entry.slave->get_slave();
-    entry.slave->domains(domain_map);
-    domain_map_ = domain_map.at(0);
 
     // Same isolation as read_process_data(): one slave's exception must not stop the rest of
     // the bus from getting its commands written.
     bool ok = true;
     for (auto i = 0; ok && i < entry.num_pdos; ++i) {
-      auto index = domain_map_[i];
+      auto index = entry.slave->process_data_index(i);
       ok = slave->processDataSafe(index, domain_info->domain_pd + entry.offset[i]);
     }
     if (ok) {
