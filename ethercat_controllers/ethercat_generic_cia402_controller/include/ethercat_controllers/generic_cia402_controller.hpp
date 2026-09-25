@@ -101,6 +101,20 @@ namespace ethercat_controllers {
           rt_start_manual_homing_srv_ptr_;
       rclcpp::Service<ResetFaultSrv>::SharedPtr start_manual_homing_srv_ptr_;
 
+      // disable_drive / enable_drive: while disabled, the control word is held at
+      // Shutdown (0x06) so the drive leaves Operation Enabled (servo off, EtherCAT
+      // stays OP) and the axis can be moved by hand. enable_drive releases it; the
+      // drive plugin's automatic state machine then walks it back to Operation Enabled.
+      std::vector<realtime_tools::RealtimeBuffer<
+          std::shared_ptr<ResetFaultSrv::Request>>>
+          rt_disable_drive_srv_ptr_;
+      rclcpp::Service<ResetFaultSrv>::SharedPtr disable_drive_srv_ptr_;
+      std::vector<realtime_tools::RealtimeBuffer<
+          std::shared_ptr<ResetFaultSrv::Request>>>
+          rt_enable_drive_srv_ptr_;
+      rclcpp::Service<ResetFaultSrv>::SharedPtr enable_drive_srv_ptr_;
+      std::vector<bool> drive_disabled_;
+
       std::string logger_name_;
 
       std::string device_state_str(uint16_t status_word);
@@ -125,6 +139,19 @@ namespace ethercat_controllers {
           const std::shared_ptr<ResetFaultSrv::Request> request,
           std::shared_ptr<ResetFaultSrv::Response> response
       );
+
+      void disable_drive(
+          const std::shared_ptr<ResetFaultSrv::Request> request,
+          std::shared_ptr<ResetFaultSrv::Response> response
+      );
+
+      void enable_drive(
+          const std::shared_ptr<ResetFaultSrv::Request> request,
+          std::shared_ptr<ResetFaultSrv::Response> response
+      );
+
+      /** index of dof_name in dof_names_, or -1 */
+      int dof_index(const std::string &dof_name) const;
   };
 
 } // namespace ethercat_controllers

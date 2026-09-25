@@ -70,6 +70,9 @@ namespace ethercat_controllers {
     rt_reset_fault_srv_ptr_.resize(dof_names_.size());
     rt_start_homing_srv_ptr_.resize(dof_names_.size());
     rt_start_manual_homing_srv_ptr_.resize(dof_names_.size());
+    rt_disable_drive_srv_ptr_.resize(dof_names_.size());
+    rt_enable_drive_srv_ptr_.resize(dof_names_.size());
+    drive_disabled_.assign(dof_names_.size(), false);
 
     reset_homing_.resize(dof_names_.size(), false);
 
@@ -107,6 +110,14 @@ namespace ethercat_controllers {
         "~/reset_fault",
         std::bind(&CiA402Controller::reset_fault_callback, this, _1, _2)
     );
+    disable_drive_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
+        "~/disable_drive",
+        std::bind(&CiA402Controller::disable_drive, this, _1, _2)
+    );
+    enable_drive_srv_ptr_ = get_node()->create_service<ResetFaultSrv>(
+        "~/enable_drive",
+        std::bind(&CiA402Controller::enable_drive, this, _1, _2)
+    );
 
     RCLCPP_INFO(get_node()->get_logger(), "configure successful");
     return CallbackReturn::SUCCESS;
@@ -140,11 +151,17 @@ namespace ethercat_controllers {
 
   CallbackReturn CiA402Controller::
       on_activate(const rclcpp_lifecycle::State & /*previous_state*/) {
+    drive_disabled_.assign(dof_names_.size(), false);
     return CallbackReturn::SUCCESS;
   }
 
   CallbackReturn CiA402Controller::
       on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) {
+    // hand every control word back to the drive plugin's state machine
+    for (auto i = 0ul; i < dof_names_.size() && 4 * i < command_interfaces_.size(); i++) {
+      command_interfaces_[4 * i].set_value(std::numeric_limits<double>::quiet_NaN());
+    }
+    drive_disabled_.assign(dof_names_.size(), false);
     return CallbackReturn::SUCCESS;
   }
 
@@ -256,6 +273,22 @@ namespace ethercat_controllers {
             static_cast<double>(reset_faults_[i])
         ); // reset_fault
       }
+      auto disable_drive_request = rt_disable_drive_srv_ptr_[i].readFromRT();
+      if (disable_drive_request && (*disable_drive_request)) {
+        drive_disabled_[i] = true;
+        rt_disable_drive_srv_ptr_[i].reset();
+      }
+      auto enable_drive_request = rt_enable_drive_srv_ptr_[i].readFromRT();
+      if (enable_drive_request && (*enable_drive_request)) {
+        drive_disabled_[i] = false;
+        rt_enable_drive_srv_ptr_[i].reset();
+      }
+      // NaN = the drive plugin runs its own CiA402 state machine
+      command_interfaces_[4 * i].set_value(
+          drive_disabled_[i] ? 0x06 /* Shutdown -> Ready to Switch On */
+                             : std::numeric_limits<double>::quiet_NaN()
+      ); // control_word
+
       if (reset_homing_[i]) {
         std::cout << "Setting start homing to 1 for dof: " << dof_names_[i]
                   << std::endl;
@@ -351,6 +384,46 @@ namespace ethercat_controllers {
       response->return_message =
           "Abort. DoF " + request->dof_name + " not configured.";
     }
+  }
+
+  int CiA402Controller::dof_index(const std::string &dof_name) const {
+    auto it = std::find(dof_names_.begin(), dof_names_.end(), dof_name);
+    return it == dof_names_.end() ? -1 : static_cast<int>(it - dof_names_.begin());
+  }
+
+  void CiA402Controller::disable_drive(
+      const std::shared_ptr<ResetFaultSrv::Request> request,
+      std::shared_ptr<ResetFaultSrv::Response> response
+  ) {
+    int i = dof_index(request->dof_name);
+    if (i < 0) {
+      response->return_message =
+          "Abort. DoF " + request->dof_name + " not configured.";
+      return;
+    }
+    rt_disable_drive_srv_ptr_[i].writeFromNonRT(request);
+    RCLCPP_WARN(
+        get_node()->get_logger(), "Disabling drive of dof %s (Shutdown, servo off)",
+        request->dof_name.c_str()
+    );
+    response->return_message = "Disabling drive of dof: " + request->dof_name;
+  }
+
+  void CiA402Controller::enable_drive(
+      const std::shared_ptr<ResetFaultSrv::Request> request,
+      std::shared_ptr<ResetFaultSrv::Response> response
+  ) {
+    int i = dof_index(request->dof_name);
+    if (i < 0) {
+      response->return_message =
+          "Abort. DoF " + request->dof_name + " not configured.";
+      return;
+    }
+    rt_enable_drive_srv_ptr_[i].writeFromNonRT(request);
+    RCLCPP_WARN(
+        get_node()->get_logger(), "Enabling drive of dof %s", request->dof_name.c_str()
+    );
+    response->return_message = "Enabling drive of dof: " + request->dof_name;
   }
 
   void CiA402Controller::start_homing(
